@@ -1,0 +1,49 @@
+[project]
+name = "sqliterag-backend"
+version = "0.1.0"
+description = "Local-first chat application with Ollama + RAG using SQLite"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    "sqlalchemy[asyncio]>=2.0.40",
+    "aiosqlite>=0.20.0",
+    "sqlite-vec>=0.1.6",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.8.0",
+    "httpx>=0.28.0",
+    "python-multipart>=0.0.20",
+    "python-dotenv>=1.0.0",
+    "langchain-text-splitters>=0.3.0",
+    "huggingface-hub>=0.28.0",
+    "pypdf>=5.0.0",
+    "alembic>=1.14.0",
+    "sse-starlette>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+    "httpx",
+    "ruff>=0.8.0",
+]
+
+[build-system]
+requires = ["setuptools>=75.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "SIM"]
+ignore = ["B008"]  # Allow Depends() in function defaults (FastAPI pattern)
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
