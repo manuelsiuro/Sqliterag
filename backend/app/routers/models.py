@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Query
 from sse_starlette.sse import EventSourceResponse
 
 from app.dependencies import get_huggingface_service, get_ollama_service
-from app.schemas.model import LocalModel, ModelPullRequest, ModelSearchResult
+from app.schemas.model import LocalModel, ModelDetail, ModelPullRequest, ModelSearchResult
 from app.services.huggingface_service import HuggingFaceService
 from app.services.ollama_service import OllamaService
 
@@ -27,6 +27,34 @@ async def list_local_models(
         )
         for m in models
     ]
+
+
+@router.get("/{model_name:path}/details", response_model=ModelDetail)
+async def get_model_details(
+    model_name: str,
+    ollama: OllamaService = Depends(get_ollama_service),
+):
+    data = await ollama.show_model(model_name)
+    details = data.get("details", {})
+    model_info = data.get("model_info", {})
+
+    # Search model_info keys for context_length
+    context_length = None
+    for key, value in model_info.items():
+        if "context_length" in key and isinstance(value, int):
+            context_length = value
+            break
+
+    return ModelDetail(
+        name=model_name,
+        family=details.get("family"),
+        families=details.get("families", []),
+        parameter_size=details.get("parameter_size"),
+        quantization_level=details.get("quantization_level"),
+        context_length=context_length,
+        format=details.get("format"),
+        parent_model=details.get("parent_model"),
+    )
 
 
 @router.post("/pull")

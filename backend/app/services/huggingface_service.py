@@ -37,6 +37,9 @@ class HuggingFaceService:
                     downloads=m.downloads or 0,
                     likes=m.likes or 0,
                     tags=list(m.tags) if m.tags else [],
+                    last_modified=m.last_modified.isoformat() if m.last_modified else None,
+                    pipeline_tag=getattr(m, "pipeline_tag", None),
+                    url=f"https://huggingface.co/{m.id}",
                 )
             )
         return results

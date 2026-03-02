@@ -7,11 +7,17 @@ interface ModelSelectorProps {
 }
 
 export function ModelSelector({ selectedModel, onSelect }: ModelSelectorProps) {
-  const { localModels, loadLocalModels } = useSettingsStore();
+  const { localModels, loadLocalModels, loadModelDetail } = useSettingsStore();
 
   useEffect(() => {
     loadLocalModels();
   }, [loadLocalModels]);
+
+  useEffect(() => {
+    if (selectedModel) {
+      loadModelDetail(selectedModel);
+    }
+  }, [selectedModel, loadModelDetail]);
 
   return (
     <div>

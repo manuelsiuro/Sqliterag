@@ -28,12 +28,20 @@ async def chat(
     if not conv:
         raise NotFoundError("Conversation", conversation_id)
 
+    # Build options dict from parameters, excluding None values
+    options = None
+    if data.parameters:
+        opts = {k: v for k, v in data.parameters.model_dump().items() if v is not None}
+        if opts:
+            options = opts
+
     async def event_generator():
         async for event in chat_service.stream_chat(
             session=session,
             conversation_id=conversation_id,
             model=conv.model,
             user_message=data.message,
+            options=options,
         ):
             yield event
 

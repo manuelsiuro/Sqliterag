@@ -38,12 +38,35 @@ export interface LocalModel {
   quantization_level: string | null;
 }
 
+export interface ModelDetail {
+  name: string;
+  family: string | null;
+  families: string[];
+  parameter_size: string | null;
+  quantization_level: string | null;
+  context_length: number | null;
+  format: string | null;
+  parent_model: string | null;
+}
+
+export interface ModelParameters {
+  temperature: number | null;
+  top_p: number | null;
+  top_k: number | null;
+  num_ctx: number | null;
+  repeat_penalty: number | null;
+  seed: number | null;
+}
+
 export interface ModelSearchResult {
   id: string;
   author: string | null;
   downloads: number;
   likes: number;
   tags: string[];
+  last_modified: string | null;
+  pipeline_tag: string | null;
+  url: string | null;
 }
 
 export interface ChatTokenEvent {

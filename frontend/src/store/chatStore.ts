@@ -1,6 +1,7 @@
 import { create } from "zustand";
-import type { Conversation, Message } from "@/types";
+import type { Conversation, Message, ModelParameters } from "@/types";
 import { api } from "@/services/api";
+import { useSettingsStore } from "@/store/settingsStore";
 
 interface ChatState {
   conversations: Conversation[];
@@ -98,6 +99,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
       streamingContent: "",
     }));
 
+    // Read model parameters from settings, pass if any are set
+    const { modelParameters } = useSettingsStore.getState();
+    const hasParams = Object.values(modelParameters).some((v) => v !== null);
+    const parameters: ModelParameters | undefined = hasParams ? modelParameters : undefined;
+
     const ctrl = api.streamChat(
       activeConversationId,
       message,
@@ -125,6 +131,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       (err) => {
         set({ error: err.message, isStreaming: false, streamingContent: "", abortController: null });
       },
+      parameters,
     );
     set({ abortController: ctrl });
   },

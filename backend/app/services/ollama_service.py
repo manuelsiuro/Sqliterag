@@ -40,6 +40,12 @@ class OllamaService(BaseLLMService, BaseEmbeddingService):
                     if chunk.get("done"):
                         return
 
+    async def show_model(self, name: str) -> dict:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
+            resp = await client.post(f"{self.base_url}/api/show", json={"name": name})
+            resp.raise_for_status()
+            return resp.json()
+
     async def generate_embedding(self, text: str) -> list[float]:
         async with httpx.AsyncClient(timeout=httpx.Timeout(60.0)) as client:
             resp = await client.post(

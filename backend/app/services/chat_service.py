@@ -34,6 +34,7 @@ class ChatService:
         conversation_id: str,
         model: str,
         user_message: str,
+        options: dict | None = None,
     ) -> AsyncGenerator[str]:
         # Save user message
         user_msg = Message(
@@ -68,7 +69,10 @@ class ChatService:
         # Stream response
         full_response = ""
         try:
-            async for token in self.llm_service.chat_stream(model, messages):
+            kwargs = {}
+            if options:
+                kwargs["options"] = options
+            async for token in self.llm_service.chat_stream(model, messages, **kwargs):
                 full_response += token
                 yield ServerSentEvent(data=json.dumps({"token": token}), event="token")
         except asyncio.CancelledError:

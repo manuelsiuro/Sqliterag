@@ -5,8 +5,18 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict
 
 
+class ModelParameters(BaseModel):
+    temperature: float | None = None
+    top_p: float | None = None
+    top_k: int | None = None
+    num_ctx: int | None = None
+    repeat_penalty: float | None = None
+    seed: int | None = None
+
+
 class MessageCreate(BaseModel):
     message: str
+    parameters: ModelParameters | None = None
 
 
 class MessageRead(BaseModel):

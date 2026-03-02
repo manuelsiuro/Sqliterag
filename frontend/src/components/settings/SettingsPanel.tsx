@@ -1,4 +1,6 @@
 import { ModelSelector } from "./ModelSelector";
+import { ModelDetailCard } from "./ModelDetailCard";
+import { ModelParametersForm } from "./ModelParametersForm";
 import { HuggingFaceSearch } from "./HuggingFaceSearch";
 import { useChatStore } from "@/store/chatStore";
 import { api } from "@/services/api";
@@ -27,6 +29,8 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
       </div>
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
         <ModelSelector selectedModel={currentModel} onSelect={handleModelChange} />
+        <ModelDetailCard />
+        <ModelParametersForm />
         <hr className="border-gray-800" />
         <HuggingFaceSearch />
       </div>

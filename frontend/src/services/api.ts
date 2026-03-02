@@ -5,6 +5,8 @@ import type {
   Document,
   DocumentUploadResponse,
   LocalModel,
+  ModelDetail,
+  ModelParameters,
   ModelSearchResult,
 } from "@/types";
 
@@ -51,12 +53,13 @@ export const api = {
     onToken: (token: string) => void,
     onDone: (messageId: string) => void,
     onError: (err: Error) => void,
+    parameters?: ModelParameters,
   ) => {
     const ctrl = new AbortController();
     fetchEventSource(`${BASE_URL}/chat/${conversationId}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message }),
+      body: JSON.stringify({ message, parameters }),
       signal: ctrl.signal,
       onmessage(ev) {
         if (ev.event === "token") {
@@ -103,6 +106,9 @@ export const api = {
     });
     return ctrl;
   },
+
+  getModelDetails: (name: string) =>
+    request<ModelDetail>(`/models/${encodeURIComponent(name)}/details`),
 
   searchModels: (q: string) => request<ModelSearchResult[]>(`/models/search?q=${encodeURIComponent(q)}`),
 

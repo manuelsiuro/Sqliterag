@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { api } from "@/services/api";
-import type { LocalModel, ModelSearchResult } from "@/types";
+import type { LocalModel, ModelDetail, ModelParameters, ModelSearchResult } from "@/types";
 
 interface SettingsState {
   settings: Record<string, string>;
@@ -9,12 +9,17 @@ interface SettingsState {
   isSearching: boolean;
   isPulling: boolean;
   pullStatus: string;
+  selectedModelDetail: ModelDetail | null;
+  isLoadingModelDetail: boolean;
+  modelParameters: ModelParameters;
 
   loadSettings: () => Promise<void>;
   updateSettings: (settings: Record<string, string>) => Promise<void>;
   loadLocalModels: () => Promise<void>;
   searchModels: (query: string) => Promise<void>;
   pullModel: (name: string) => void;
+  loadModelDetail: (modelName: string) => Promise<void>;
+  updateModelParameters: (params: Partial<ModelParameters>) => void;
 }
 
 export const useSettingsStore = create<SettingsState>((set) => ({
@@ -24,6 +29,16 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   isSearching: false,
   isPulling: false,
   pullStatus: "",
+  selectedModelDetail: null,
+  isLoadingModelDetail: false,
+  modelParameters: {
+    temperature: null,
+    top_p: null,
+    top_k: null,
+    num_ctx: null,
+    repeat_penalty: null,
+    seed: null,
+  },
 
   loadSettings: async () => {
     const settings = await api.getSettings();
@@ -72,5 +87,19 @@ export const useSettingsStore = create<SettingsState>((set) => ({
         set({ isPulling: false, pullStatus: "Pull failed" });
       },
     );
+  },
+
+  loadModelDetail: async (modelName: string) => {
+    set({ isLoadingModelDetail: true, selectedModelDetail: null });
+    try {
+      const detail = await api.getModelDetails(modelName);
+      set({ selectedModelDetail: detail, isLoadingModelDetail: false });
+    } catch {
+      set({ selectedModelDetail: null, isLoadingModelDetail: false });
+    }
+  },
+
+  updateModelParameters: (params: Partial<ModelParameters>) => {
+    set((s) => ({ modelParameters: { ...s.modelParameters, ...params } }));
   },
 }));
