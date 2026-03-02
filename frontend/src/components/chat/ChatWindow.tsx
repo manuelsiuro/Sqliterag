@@ -27,7 +27,7 @@ export function ChatWindow() {
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-gray-950">
+    <div className="flex-1 flex flex-col min-h-0 bg-gray-950">
       <MessageList messages={messages} streamingContent={streamingContent} isStreaming={isStreaming} />
       <ChatInput onSend={sendMessage} disabled={isStreaming} isStreaming={isStreaming} onStop={stopStreaming} />
     </div>

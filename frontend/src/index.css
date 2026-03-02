@@ -21,3 +21,14 @@ body {
   background: #4b5563;
   border-radius: 3px;
 }
+
+/* Neutralize prose defaults for custom code block styling */
+.prose pre {
+  background: transparent !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+.prose code::before,
+.prose code::after {
+  content: none !important;
+}
