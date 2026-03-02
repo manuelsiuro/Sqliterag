@@ -1,17 +1,18 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ErrorBoundary, Toast } from "@/components/common";
 import { Sidebar } from "@/components/sidebar";
 import { ChatWindow } from "@/components/chat";
 import { SettingsPanel } from "@/components/settings";
 import { DatabasePanel } from "@/components/database";
+import { ToolsPanel } from "@/components/tools";
 import { DocumentList } from "@/components/documents";
 import { useChatStore } from "@/store/chatStore";
 import { useSettingsStore } from "@/store/settingsStore";
-import { useEffect } from "react";
 
 function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showDatabase, setShowDatabase] = useState(false);
+  const [showTools, setShowTools] = useState(false);
   const { error, clearError } = useChatStore();
   const { loadLocalModels } = useSettingsStore();
 
@@ -22,11 +23,19 @@ function App() {
   const handleToggleSettings = () => {
     setShowSettings((s) => !s);
     setShowDatabase(false);
+    setShowTools(false);
   };
 
   const handleToggleDatabase = () => {
     setShowDatabase((s) => !s);
     setShowSettings(false);
+    setShowTools(false);
+  };
+
+  const handleToggleTools = () => {
+    setShowTools((s) => !s);
+    setShowSettings(false);
+    setShowDatabase(false);
   };
 
   return (
@@ -35,6 +44,7 @@ function App() {
         <Sidebar
           onToggleSettings={handleToggleSettings}
           onToggleDatabase={handleToggleDatabase}
+          onToggleTools={handleToggleTools}
         />
 
         <main className="flex-1 flex flex-col min-w-0">
@@ -53,6 +63,10 @@ function App() {
 
         {showDatabase && (
           <DatabasePanel onClose={() => setShowDatabase(false)} />
+        )}
+
+        {showTools && (
+          <ToolsPanel onClose={() => setShowTools(false)} />
         )}
       </div>
 

@@ -9,6 +9,7 @@ interface ChatState {
   messages: Message[];
   streamingContent: string;
   isStreaming: boolean;
+  isToolCalling: boolean;
   isLoading: boolean;
   error: string | null;
   abortController: AbortController | null;
@@ -29,6 +30,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   messages: [],
   streamingContent: "",
   isStreaming: false,
+  isToolCalling: false,
   isLoading: false,
   error: null,
   abortController: null,
@@ -123,15 +125,45 @@ export const useChatStore = create<ChatState>((set, get) => ({
           messages: [...s.messages, assistantMsg],
           streamingContent: "",
           isStreaming: false,
+          isToolCalling: false,
           abortController: null,
         }));
         // Refresh conversations to update timestamps
         get().loadConversations();
       },
       (err) => {
-        set({ error: err.message, isStreaming: false, streamingContent: "", abortController: null });
+        set({ error: err.message, isStreaming: false, isToolCalling: false, streamingContent: "", abortController: null });
       },
       parameters,
+      // onToolCall
+      (data) => {
+        const toolCallMsg: Message = {
+          id: data.message_id,
+          conversation_id: activeConversationId,
+          role: "assistant",
+          content: "",
+          tool_calls: data.tool_calls,
+          created_at: new Date().toISOString(),
+        };
+        set((s) => ({
+          messages: [...s.messages, toolCallMsg],
+          isToolCalling: true,
+        }));
+      },
+      // onToolResult
+      (data) => {
+        const toolResultMsg: Message = {
+          id: data.message_id,
+          conversation_id: activeConversationId,
+          role: "tool",
+          content: data.result,
+          tool_name: data.tool_name,
+          created_at: new Date().toISOString(),
+        };
+        set((s) => ({
+          messages: [...s.messages, toolResultMsg],
+        }));
+      },
     );
     set({ abortController: ctrl });
   },

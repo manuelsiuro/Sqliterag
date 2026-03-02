@@ -5,6 +5,7 @@ from datetime import datetime
 
 from sqlalchemy import ForeignKey, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from typing import Optional
 
 from app.models.base import Base
 
@@ -16,8 +17,10 @@ class Message(Base):
     conversation_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("conversations.id", ondelete="CASCADE")
     )
-    role: Mapped[str] = mapped_column(String(20))  # "user", "assistant", "system"
+    role: Mapped[str] = mapped_column(String(20))  # "user", "assistant", "system", "tool"
     content: Mapped[str] = mapped_column(Text)
+    tool_calls: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON of tool_calls array
+    tool_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # for role="tool" messages
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
     conversation: Mapped[Conversation] = relationship("Conversation", back_populates="messages")

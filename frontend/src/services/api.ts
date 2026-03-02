@@ -9,6 +9,10 @@ import type {
   ModelDetail,
   ModelParameters,
   ModelSearchResult,
+  ToolCallEvent,
+  ToolCreate,
+  ToolDefinition,
+  ToolResultEvent,
 } from "@/types";
 
 const BASE_URL = "/api";
@@ -55,6 +59,8 @@ export const api = {
     onDone: (messageId: string) => void,
     onError: (err: Error) => void,
     parameters?: ModelParameters,
+    onToolCall?: (data: ToolCallEvent) => void,
+    onToolResult?: (data: ToolResultEvent) => void,
   ) => {
     const ctrl = new AbortController();
     fetchEventSource(`${BASE_URL}/chat/${conversationId}`, {
@@ -69,6 +75,12 @@ export const api = {
         } else if (ev.event === "done") {
           const data = JSON.parse(ev.data);
           onDone(data.message_id);
+        } else if (ev.event === "tool_calls") {
+          const data = JSON.parse(ev.data) as ToolCallEvent;
+          onToolCall?.(data);
+        } else if (ev.event === "tool_result") {
+          const data = JSON.parse(ev.data) as ToolResultEvent;
+          onToolResult?.(data);
         } else if (ev.event === "error") {
           const data = JSON.parse(ev.data);
           onError(new Error(data.error || "Stream failed"));
@@ -171,4 +183,31 @@ export const api = {
     a.click();
     URL.revokeObjectURL(url);
   },
+
+  // Tools
+  listTools: () => request<ToolDefinition[]>("/tools"),
+
+  createTool: (data: ToolCreate) =>
+    request<ToolDefinition>("/tools", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  updateTool: (id: string, data: Partial<ToolCreate> & { is_enabled?: boolean }) =>
+    request<ToolDefinition>(`/tools/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+
+  deleteTool: (id: string) =>
+    request<void>(`/tools/${id}`, { method: "DELETE" }),
+
+  getConversationTools: (conversationId: string) =>
+    request<ToolDefinition[]>(`/tools/conversations/${conversationId}`),
+
+  setConversationTools: (conversationId: string, toolIds: string[]) =>
+    request<{ status: string; tool_ids: string[] }>(`/tools/conversations/${conversationId}`, {
+      method: "PUT",
+      body: JSON.stringify({ tool_ids: toolIds }),
+    }),
 };

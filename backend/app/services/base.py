@@ -14,6 +14,9 @@ class BaseLLMService(ABC):
     ) -> AsyncGenerator[str]: ...
 
     @abstractmethod
+    async def chat(self, model: str, messages: list[dict], **kwargs) -> dict: ...
+
+    @abstractmethod
     async def pull_model_stream(self, name: str) -> AsyncGenerator[dict]: ...
 
 

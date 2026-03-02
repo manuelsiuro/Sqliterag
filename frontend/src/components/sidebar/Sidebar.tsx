@@ -6,9 +6,10 @@ import { ConversationList } from "./ConversationList";
 interface SidebarProps {
   onToggleSettings: () => void;
   onToggleDatabase: () => void;
+  onToggleTools: () => void;
 }
 
-export function Sidebar({ onToggleSettings, onToggleDatabase }: SidebarProps) {
+export function Sidebar({ onToggleSettings, onToggleDatabase, onToggleTools }: SidebarProps) {
   const {
     conversations,
     activeConversationId,
@@ -46,6 +47,12 @@ export function Sidebar({ onToggleSettings, onToggleDatabase }: SidebarProps) {
       </div>
 
       <div className="p-3 border-t border-gray-800 space-y-2">
+        <button
+          onClick={onToggleTools}
+          className="w-full px-3 py-2 text-gray-400 hover:text-white text-sm rounded-lg hover:bg-gray-800 transition-colors"
+        >
+          Tools
+        </button>
         <button
           onClick={onToggleDatabase}
           className="w-full px-3 py-2 text-gray-400 hover:text-white text-sm rounded-lg hover:bg-gray-800 transition-colors"

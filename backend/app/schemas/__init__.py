@@ -7,11 +7,18 @@ from app.schemas.conversation import (
 from app.schemas.document import DocumentChunkRead, DocumentRead, DocumentUploadResponse
 from app.schemas.message import MessageCreate, MessageRead
 from app.schemas.model import LocalModel, ModelPullRequest, ModelSearchResult
+from app.schemas.tool import (
+    ConversationToolToggle,
+    ToolCreate,
+    ToolRead,
+    ToolUpdate,
+)
 
 __all__ = [
     "ConversationCreate",
     "ConversationRead",
     "ConversationUpdate",
+    "ConversationToolToggle",
     "ConversationWithMessages",
     "DocumentChunkRead",
     "DocumentRead",
@@ -21,4 +28,7 @@ __all__ = [
     "LocalModel",
     "ModelPullRequest",
     "ModelSearchResult",
+    "ToolCreate",
+    "ToolRead",
+    "ToolUpdate",
 ]

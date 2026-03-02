@@ -40,6 +40,13 @@ class OllamaService(BaseLLMService, BaseEmbeddingService):
                     if chunk.get("done"):
                         return
 
+    async def chat(self, model: str, messages: list[dict], **kwargs) -> dict:
+        payload = {"model": model, "messages": messages, "stream": False, **kwargs}
+        async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
+            resp = await client.post(f"{self.base_url}/api/chat", json=payload)
+            resp.raise_for_status()
+            return resp.json().get("message", {})
+
     async def show_model(self, name: str) -> dict:
         async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
             resp = await client.post(f"{self.base_url}/api/show", json={"name": name})

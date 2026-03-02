@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 
 class ModelParameters(BaseModel):
@@ -26,4 +27,13 @@ class MessageRead(BaseModel):
     conversation_id: str
     role: str
     content: str
+    tool_calls: list | dict | None = None
+    tool_name: str | None = None
     created_at: datetime
+
+    @field_validator("tool_calls", mode="before")
+    @classmethod
+    def parse_tool_calls(cls, v):
+        if isinstance(v, str):
+            return json.loads(v)
+        return v

@@ -2,6 +2,7 @@ import { memo } from "react";
 import type { Message } from "@/types";
 import { MarkdownRenderer } from "./MarkdownRenderer";
 import { CopyButton } from "@/components/common";
+import { ToolCallBubble, ToolResultBubble } from "@/components/tools";
 
 interface MessageBubbleProps {
   message: Message;
@@ -9,6 +10,16 @@ interface MessageBubbleProps {
 
 export const MessageBubble = memo(
   function MessageBubble({ message }: MessageBubbleProps) {
+    // Tool call messages (assistant with tool_calls)
+    if (message.role === "assistant" && message.tool_calls?.length) {
+      return <ToolCallBubble message={message} />;
+    }
+
+    // Tool result messages
+    if (message.role === "tool") {
+      return <ToolResultBubble message={message} />;
+    }
+
     const isUser = message.role === "user";
 
     return (

@@ -39,7 +39,7 @@ app.add_exception_handler(AppError, app_error_handler)
 app.add_exception_handler(Exception, generic_error_handler)
 
 # Import and mount routers
-from app.routers import chat, conversations, database, documents, models, settings  # noqa: E402
+from app.routers import chat, conversations, database, documents, models, settings, tools  # noqa: E402
 
 app.include_router(conversations.router, prefix="/api")
 app.include_router(chat.router, prefix="/api")
@@ -47,6 +47,7 @@ app.include_router(documents.router, prefix="/api")
 app.include_router(models.router, prefix="/api")
 app.include_router(settings.router, prefix="/api")
 app.include_router(database.router, prefix="/api")
+app.include_router(tools.router, prefix="/api")
 
 
 @app.get("/api/health")

@@ -9,8 +9,10 @@ export interface Conversation {
 export interface Message {
   id: string;
   conversation_id: string;
-  role: "user" | "assistant" | "system";
+  role: "user" | "assistant" | "system" | "tool";
   content: string;
+  tool_calls?: Array<{ function: { name: string; arguments: Record<string, unknown> } }> | null;
+  tool_name?: string | null;
   created_at: string;
 }
 
@@ -87,5 +89,50 @@ export interface ChatTokenEvent {
 }
 
 export interface ChatDoneEvent {
+  message_id: string;
+}
+
+// Tool types
+export interface ToolParameterProperty {
+  type: string;
+  description?: string;
+  enum?: string[];
+}
+
+export interface ToolParametersSchema {
+  type: string;
+  required: string[];
+  properties: Record<string, ToolParameterProperty>;
+}
+
+export interface ToolDefinition {
+  id: string;
+  name: string;
+  description: string;
+  parameters_schema: ToolParametersSchema;
+  execution_type: "http" | "mock";
+  execution_config: Record<string, unknown>;
+  is_enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ToolCreate {
+  name: string;
+  description: string;
+  parameters_schema: ToolParametersSchema;
+  execution_type: string;
+  execution_config: Record<string, unknown>;
+}
+
+export interface ToolCallEvent {
+  tool_calls: Array<{ function: { name: string; arguments: Record<string, unknown> } }>;
+  message_id: string;
+}
+
+export interface ToolResultEvent {
+  tool_name: string;
+  arguments: Record<string, unknown>;
+  result: string;
   message_id: string;
 }
