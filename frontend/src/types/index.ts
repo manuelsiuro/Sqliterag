@@ -69,6 +69,19 @@ export interface ModelSearchResult {
   url: string | null;
 }
 
+export interface TableInfo {
+  name: string;
+  row_count: number;
+}
+
+export interface DatabaseInfo {
+  file_path: string;
+  file_size_bytes: number;
+  sqlite_version: string;
+  table_count: number;
+  tables: TableInfo[];
+}
+
 export interface ChatTokenEvent {
   token: string;
 }

@@ -3,6 +3,7 @@ import { ErrorBoundary, Toast } from "@/components/common";
 import { Sidebar } from "@/components/sidebar";
 import { ChatWindow } from "@/components/chat";
 import { SettingsPanel } from "@/components/settings";
+import { DatabasePanel } from "@/components/database";
 import { DocumentList } from "@/components/documents";
 import { useChatStore } from "@/store/chatStore";
 import { useSettingsStore } from "@/store/settingsStore";
@@ -10,6 +11,7 @@ import { useEffect } from "react";
 
 function App() {
   const [showSettings, setShowSettings] = useState(false);
+  const [showDatabase, setShowDatabase] = useState(false);
   const { error, clearError } = useChatStore();
   const { loadLocalModels } = useSettingsStore();
 
@@ -17,10 +19,23 @@ function App() {
     loadLocalModels();
   }, [loadLocalModels]);
 
+  const handleToggleSettings = () => {
+    setShowSettings((s) => !s);
+    setShowDatabase(false);
+  };
+
+  const handleToggleDatabase = () => {
+    setShowDatabase((s) => !s);
+    setShowSettings(false);
+  };
+
   return (
     <ErrorBoundary>
       <div className="flex h-screen bg-gray-950 text-white">
-        <Sidebar onToggleSettings={() => setShowSettings((s) => !s)} />
+        <Sidebar
+          onToggleSettings={handleToggleSettings}
+          onToggleDatabase={handleToggleDatabase}
+        />
 
         <main className="flex-1 flex flex-col min-w-0">
           <ChatWindow />
@@ -34,6 +49,10 @@ function App() {
               <DocumentList />
             </div>
           </div>
+        )}
+
+        {showDatabase && (
+          <DatabasePanel onClose={() => setShowDatabase(false)} />
         )}
       </div>
 

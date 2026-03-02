@@ -2,6 +2,7 @@ import { fetchEventSource } from "@microsoft/fetch-event-source";
 import type {
   Conversation,
   ConversationWithMessages,
+  DatabaseInfo,
   Document,
   DocumentUploadResponse,
   LocalModel,
@@ -140,4 +141,34 @@ export const api = {
       method: "PUT",
       body: JSON.stringify({ settings }),
     }),
+
+  // Database
+  getDatabaseInfo: () => request<DatabaseInfo>("/database/info"),
+
+  vacuumDatabase: () =>
+    request<{ status: string; file_size_bytes: number }>("/database/vacuum", {
+      method: "POST",
+    }),
+
+  clearConversations: () =>
+    request<{ deleted: number }>("/database/clear-conversations", {
+      method: "POST",
+    }),
+
+  clearDocuments: () =>
+    request<{ deleted: number }>("/database/clear-documents", {
+      method: "POST",
+    }),
+
+  exportDatabase: async () => {
+    const res = await fetch(`${BASE_URL}/database/export`);
+    if (!res.ok) throw new Error("Export failed");
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "sqliterag.db";
+    a.click();
+    URL.revokeObjectURL(url);
+  },
 };
