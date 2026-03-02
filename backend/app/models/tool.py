@@ -16,7 +16,7 @@ class Tool(Base):
     name: Mapped[str] = mapped_column(String(100), unique=True)
     description: Mapped[str] = mapped_column(Text)
     parameters_schema: Mapped[str] = mapped_column(Text)  # JSON string
-    execution_type: Mapped[str] = mapped_column(String(20), default="mock")  # "http" | "mock"
+    execution_type: Mapped[str] = mapped_column(String(20), default="mock")  # "http" | "mock" | "builtin"
     execution_config: Mapped[str] = mapped_column(Text, default="{}")  # JSON blob
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())

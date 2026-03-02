@@ -32,3 +32,23 @@ body {
 .prose code::after {
   content: none !important;
 }
+
+/* Dice pop-in animation */
+@keyframes dice-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.5) rotate(-10deg);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(1.1) rotate(2deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+.animate-dice-pop {
+  animation: dice-pop 0.3s ease-out both;
+}

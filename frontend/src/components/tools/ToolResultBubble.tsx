@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { Message } from "@/types";
+import { tryParseToolResult, getToolRenderer } from "./renderers";
 
 interface ToolResultBubbleProps {
   message: Message;
@@ -8,6 +9,9 @@ interface ToolResultBubbleProps {
 export function ToolResultBubble({ message }: ToolResultBubbleProps) {
   const [expanded, setExpanded] = useState(false);
   const isLong = message.content.length > 200;
+
+  const parsed = tryParseToolResult(message.content);
+  const Renderer = parsed ? getToolRenderer(parsed.type) : null;
 
   return (
     <div className="flex justify-start mb-4">
@@ -18,35 +22,40 @@ export function ToolResultBubble({ message }: ToolResultBubbleProps) {
             {message.tool_name ?? "Tool"} result
           </span>
         </div>
-        <div className="mt-1">
-          {isLong && !expanded ? (
-            <>
-              <pre className="p-2 bg-gray-900/60 rounded text-xs text-gray-300 overflow-x-auto whitespace-pre-wrap">
-                {message.content.slice(0, 200)}...
-              </pre>
-              <button
-                onClick={() => setExpanded(true)}
-                className="mt-1 text-xs text-green-400 hover:text-green-300 underline"
-              >
-                Show full result
-              </button>
-            </>
-          ) : (
-            <>
-              <pre className="p-2 bg-gray-900/60 rounded text-xs text-gray-300 overflow-x-auto whitespace-pre-wrap">
-                {message.content}
-              </pre>
-              {isLong && (
+
+        {Renderer ? (
+          <Renderer data={parsed!} rawContent={message.content} />
+        ) : (
+          <div className="mt-1">
+            {isLong && !expanded ? (
+              <>
+                <pre className="p-2 bg-gray-900/60 rounded text-xs text-gray-300 overflow-x-auto whitespace-pre-wrap">
+                  {message.content.slice(0, 200)}...
+                </pre>
                 <button
-                  onClick={() => setExpanded(false)}
+                  onClick={() => setExpanded(true)}
                   className="mt-1 text-xs text-green-400 hover:text-green-300 underline"
                 >
-                  Collapse
+                  Show full result
                 </button>
-              )}
-            </>
-          )}
-        </div>
+              </>
+            ) : (
+              <>
+                <pre className="p-2 bg-gray-900/60 rounded text-xs text-gray-300 overflow-x-auto whitespace-pre-wrap">
+                  {message.content}
+                </pre>
+                {isLong && (
+                  <button
+                    onClick={() => setExpanded(false)}
+                    className="mt-1 text-xs text-green-400 hover:text-green-300 underline"
+                  >
+                    Collapse
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

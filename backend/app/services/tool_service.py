@@ -6,6 +6,7 @@ import logging
 import httpx
 
 from app.models.tool import Tool
+from app.services.builtin_tools import BUILTIN_REGISTRY
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +16,8 @@ class ToolService:
         try:
             if tool.execution_type == "http":
                 return await self._execute_http(tool, arguments)
+            elif tool.execution_type == "builtin":
+                return self._execute_builtin(tool, arguments)
             return self._execute_mock(tool, arguments)
         except Exception as e:
             logger.exception("Tool execution failed for %s", tool.name)
@@ -42,6 +45,14 @@ class ToolService:
             if len(result) > 4000:
                 result = result[:4000] + "... [truncated]"
             return result
+
+    def _execute_builtin(self, tool: Tool, arguments: dict) -> str:
+        config = json.loads(tool.execution_config) if isinstance(tool.execution_config, str) else tool.execution_config
+        func_name = config.get("function_name", "")
+        func = BUILTIN_REGISTRY.get(func_name)
+        if func is None:
+            return f"[Unknown builtin function: {func_name}]"
+        return func(**arguments)
 
     def _execute_mock(self, tool: Tool, arguments: dict) -> str:
         args_str = ", ".join(f"{k}={v!r}" for k, v in arguments.items())

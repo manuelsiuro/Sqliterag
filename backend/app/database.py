@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import AsyncGenerator
 
 import sqlite_vec
-from sqlalchemy import event, text
+from sqlalchemy import event, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config import settings
@@ -71,4 +72,70 @@ async def init_db() -> None:
                 "vector search will be unavailable until sqlite-vec is loaded",
                 exc_info=True,
             )
+        await _migrate_messages_table(conn)
+    await seed_builtin_tools()
     logger.info("Database initialized")
+
+
+async def _migrate_messages_table(conn) -> None:
+    """Add columns introduced after initial schema (idempotent)."""
+    columns_to_add = [
+        ("tool_calls", "TEXT"),
+        ("tool_name", "VARCHAR(100)"),
+    ]
+    for col_name, col_type in columns_to_add:
+        try:
+            await conn.execute(text(f"ALTER TABLE messages ADD COLUMN {col_name} {col_type}"))
+            logger.info("Added column messages.%s", col_name)
+        except Exception:
+            # Column already exists — expected on subsequent starts
+            pass
+
+
+async def seed_builtin_tools() -> None:
+    """Insert or update built-in tools (idempotent)."""
+    from app.models.tool import Tool
+
+    builtin_defs = {
+        "roll_d20": {
+            "description": (
+                "Roll one or more 20-sided dice (d20) with an optional modifier. "
+                "Useful for tabletop RPG checks, random number generation, or just for fun."
+            ),
+            "parameters_schema": json.dumps({
+                "type": "object",
+                "required": [],
+                "properties": {
+                    "modifier": {
+                        "type": "integer",
+                        "description": "A positive or negative number added to the total roll.",
+                    },
+                    "num_dice": {
+                        "type": "integer",
+                        "description": "How many d20 dice to roll (default 1).",
+                    },
+                },
+            }),
+            "execution_type": "builtin",
+            "execution_config": json.dumps({"function_name": "roll_d20"}),
+        },
+    }
+
+    async with async_session_factory() as session:
+        for name, defn in builtin_defs.items():
+            result = await session.execute(select(Tool).where(Tool.name == name))
+            existing = result.scalars().first()
+
+            if existing is None:
+                tool = Tool(name=name, is_enabled=True, **defn)
+                session.add(tool)
+                logger.info("Seeded built-in tool: %s", name)
+            else:
+                # Update config in case it drifted (e.g. tool created via UI without function_name)
+                existing.execution_type = defn["execution_type"]
+                existing.execution_config = defn["execution_config"]
+                existing.description = defn["description"]
+                existing.parameters_schema = defn["parameters_schema"]
+                logger.info("Updated built-in tool: %s", name)
+
+        await session.commit()
