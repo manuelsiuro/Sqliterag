@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,12 +10,14 @@ from sqlalchemy.orm import selectinload
 from app.database import get_session
 from app.exceptions import NotFoundError
 from app.models.conversation import Conversation
+from app.models.rpg import Character, GameSession, Location, NPC, Quest
 from app.schemas.conversation import (
     ConversationCreate,
     ConversationRead,
     ConversationUpdate,
     ConversationWithMessages,
 )
+from app.services.rpg_service import character_to_dict
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
 
@@ -78,3 +82,52 @@ async def delete_conversation(conversation_id: str, session: AsyncSession = Depe
 
     await session.delete(conv)
     await session.commit()
+
+
+@router.get("/{conversation_id}/rpg/state")
+async def get_rpg_state(conversation_id: str, session: AsyncSession = Depends(get_session)):
+    """Return the current RPG game state for a conversation, or null if no session exists."""
+    result = await session.execute(
+        select(GameSession).where(GameSession.conversation_id == conversation_id)
+    )
+    gs = result.scalars().first()
+    if gs is None:
+        return None
+
+    # Characters
+    result = await session.execute(select(Character).where(Character.session_id == gs.id))
+    chars = [character_to_dict(c) for c in result.scalars().all()]
+
+    # Current location
+    current_loc = None
+    if gs.current_location_id:
+        result = await session.execute(select(Location).where(Location.id == gs.current_location_id))
+        loc = result.scalars().first()
+        if loc:
+            current_loc = {"name": loc.name, "description": loc.description, "biome": loc.biome}
+
+    # Active quests
+    result = await session.execute(
+        select(Quest).where(Quest.session_id == gs.id, Quest.status == "active")
+    )
+    active_quests = [{"title": q.title, "objectives": json.loads(q.objectives)} for q in result.scalars().all()]
+
+    # NPCs
+    result = await session.execute(select(NPC).where(NPC.session_id == gs.id))
+    npcs = [{"name": n.name, "disposition": n.disposition, "familiarity": n.familiarity} for n in result.scalars().all()]
+
+    # Combat & environment
+    combat = json.loads(gs.combat_state) if gs.combat_state else None
+    env = json.loads(gs.environment)
+
+    return {
+        "type": "game_state",
+        "world_name": gs.world_name,
+        "characters": chars,
+        "current_location": current_loc,
+        "active_quests": active_quests,
+        "npcs": npcs,
+        "in_combat": combat is not None,
+        "combat": combat,
+        "environment": env,
+    }

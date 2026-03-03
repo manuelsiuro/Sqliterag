@@ -27,6 +27,27 @@ RAG_SYSTEM_TEMPLATE = (
 MAX_TOOL_ROUNDS = 10
 TOKEN_CHUNK_SIZE = 4  # chars per fake "token" when chunking non-streamed response
 
+RPG_SYSTEM_PROMPT = (
+    "You are a Dungeon Master running a D&D 5e game. You have access to RPG tools that enforce game rules. "
+    "IMPORTANT RULES:\n"
+    "- Always use the tools to modify game state. Never just narrate mechanical changes.\n"
+    "- Use create_character before referencing a character in other tools.\n"
+    "- Use roll_check / roll_save for ability checks and saves — don't invent results.\n"
+    "- Use the attack tool for combat attacks — don't narrate hit/miss without rolling.\n"
+    "- Track HP, conditions, and spell slots through the tools.\n"
+    "- Narrate results dramatically after receiving tool output.\n"
+    "- When starting a new game, use init_game_session first.\n"
+)
+
+# Tool names that indicate RPG tools are active
+_RPG_TOOL_NAMES = {
+    "create_character", "get_character", "update_character", "list_characters",
+    "start_combat", "attack", "cast_spell", "heal", "take_damage", "death_save",
+    "create_location", "move_to", "look_around", "create_npc", "talk_to_npc",
+    "create_quest", "complete_quest", "init_game_session", "get_game_state",
+    "roll_dice", "roll_check", "roll_save",
+}
+
 
 class ChatService:
     def __init__(self, llm_service: BaseLLMService, rag_service: RAGService, tool_service: ToolService):
@@ -81,6 +102,12 @@ class ChatService:
 
         # Load conversation tools
         conv_tools = await self._load_conversation_tools(session, conversation_id)
+
+        # Inject RPG DM system prompt if RPG tools are enabled
+        if conv_tools:
+            tool_names = {t.name for t in conv_tools}
+            if tool_names & _RPG_TOOL_NAMES:
+                messages.insert(0, {"role": "system", "content": RPG_SYSTEM_PROMPT})
 
         kwargs = {}
         if options:
@@ -144,7 +171,11 @@ class ChatService:
 
                         tool = tool_map.get(tool_name)
                         if tool:
-                            tool_result = await self.tool_service.execute_tool(tool, arguments)
+                            tool_result = await self.tool_service.execute_tool(
+                                tool, arguments,
+                                session=session,
+                                conversation_id=conversation_id,
+                            )
                         else:
                             tool_result = f"[Unknown tool: {tool_name}]"
 

@@ -13,6 +13,8 @@ interface ToolState {
   deleteTool: (id: string) => Promise<void>;
   loadConversationTools: (conversationId: string) => Promise<void>;
   toggleConversationTool: (conversationId: string, toolId: string) => Promise<void>;
+  setConversationToolsBatch: (conversationId: string, toolIds: string[]) => Promise<void>;
+  toggleConversationToolGroup: (conversationId: string, groupToolIds: string[], enable: boolean) => Promise<void>;
 }
 
 export const useToolStore = create<ToolState>((set, get) => ({
@@ -68,5 +70,24 @@ export const useToolStore = create<ToolState>((set, get) => ({
 
     await api.setConversationTools(conversationId, newIds);
     set({ conversationToolIds: newIds });
+  },
+
+  setConversationToolsBatch: async (conversationId, toolIds) => {
+    set({ conversationToolIds: toolIds });
+    await api.setConversationTools(conversationId, toolIds);
+  },
+
+  toggleConversationToolGroup: async (conversationId, groupToolIds, enable) => {
+    const { conversationToolIds } = get();
+    let newIds: string[];
+    if (enable) {
+      const toAdd = groupToolIds.filter((id) => !conversationToolIds.includes(id));
+      newIds = [...conversationToolIds, ...toAdd];
+    } else {
+      const removeSet = new Set(groupToolIds);
+      newIds = conversationToolIds.filter((id) => !removeSet.has(id));
+    }
+    set({ conversationToolIds: newIds });
+    await api.setConversationTools(conversationId, newIds);
   },
 }));

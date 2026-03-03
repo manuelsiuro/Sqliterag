@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useMemo } from "react";
 import type { Message } from "@/types";
 import { MessageBubble } from "./MessageBubble";
 
@@ -15,6 +15,15 @@ export function MessageList({ messages, streamingContent, isStreaming }: Message
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, streamingContent]);
 
+  // Find the last assistant text message (not a tool-call message)
+  const latestAssistantId = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.role === "assistant" && !m.tool_calls?.length) return m.id;
+    }
+    return null;
+  }, [messages]);
+
   if (messages.length === 0 && !isStreaming) {
     return (
       <div className="flex-1 flex items-center justify-center text-gray-500">
@@ -29,7 +38,12 @@ export function MessageList({ messages, streamingContent, isStreaming }: Message
   return (
     <div className="flex-1 overflow-y-auto p-4">
       {messages.map((msg) => (
-        <MessageBubble key={msg.id} message={msg} />
+        <MessageBubble
+          key={msg.id}
+          message={msg}
+          isLatestAssistant={msg.id === latestAssistantId}
+          isStreaming={isStreaming}
+        />
       ))}
       {isStreaming && streamingContent && (
         <MessageBubble

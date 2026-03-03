@@ -84,8 +84,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   sendMessage: (message: string) => {
-    const { activeConversationId } = get();
+    const { activeConversationId, messages, conversations } = get();
     if (!activeConversationId || get().isStreaming) return;
+
+    // Auto-name conversation on first message
+    if (messages.length === 0) {
+      const conv = conversations.find((c) => c.id === activeConversationId);
+      if (conv && conv.title === "New Chat") {
+        const autoTitle = message.length > 40 ? message.slice(0, 40) + "..." : message;
+        get().updateConversationTitle(activeConversationId, autoTitle);
+      }
+    }
 
     const userMsg: Message = {
       id: crypto.randomUUID(),

@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import asyncio
+import inspect
 import json
 import logging
 
 import httpx
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.tool import Tool
 from app.services.builtin_tools import BUILTIN_REGISTRY
@@ -12,12 +15,21 @@ logger = logging.getLogger(__name__)
 
 
 class ToolService:
-    async def execute_tool(self, tool: Tool, arguments: dict) -> str:
+    async def execute_tool(
+        self,
+        tool: Tool,
+        arguments: dict,
+        *,
+        session: AsyncSession | None = None,
+        conversation_id: str | None = None,
+    ) -> str:
         try:
             if tool.execution_type == "http":
                 return await self._execute_http(tool, arguments)
             elif tool.execution_type == "builtin":
-                return self._execute_builtin(tool, arguments)
+                return await self._execute_builtin(
+                    tool, arguments, session=session, conversation_id=conversation_id
+                )
             return self._execute_mock(tool, arguments)
         except Exception as e:
             logger.exception("Tool execution failed for %s", tool.name)
@@ -46,13 +58,31 @@ class ToolService:
                 result = result[:4000] + "... [truncated]"
             return result
 
-    def _execute_builtin(self, tool: Tool, arguments: dict) -> str:
+    async def _execute_builtin(
+        self,
+        tool: Tool,
+        arguments: dict,
+        *,
+        session: AsyncSession | None = None,
+        conversation_id: str | None = None,
+    ) -> str:
         config = json.loads(tool.execution_config) if isinstance(tool.execution_config, str) else tool.execution_config
         func_name = config.get("function_name", "")
         func = BUILTIN_REGISTRY.get(func_name)
         if func is None:
             return f"[Unknown builtin function: {func_name}]"
-        return func(**arguments)
+
+        # Inject session/conversation_id for functions that accept them
+        sig = inspect.signature(func)
+        if "session" in sig.parameters and session is not None:
+            arguments = {**arguments, "session": session}
+        if "conversation_id" in sig.parameters and conversation_id is not None:
+            arguments = {**arguments, "conversation_id": conversation_id}
+
+        result = func(**arguments)
+        if asyncio.iscoroutine(result):
+            result = await result
+        return result
 
     def _execute_mock(self, tool: Tool, arguments: dict) -> str:
         args_str = ", ".join(f"{k}={v!r}" for k, v in arguments.items())

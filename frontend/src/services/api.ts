@@ -210,4 +210,8 @@ export const api = {
       method: "PUT",
       body: JSON.stringify({ tool_ids: toolIds }),
     }),
+
+  // RPG
+  getGameState: (conversationId: string) =>
+    request<Record<string, unknown> | null>(`/conversations/${conversationId}/rpg/state`),
 };

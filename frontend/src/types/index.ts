@@ -110,7 +110,7 @@ export interface ToolDefinition {
   name: string;
   description: string;
   parameters_schema: ToolParametersSchema;
-  execution_type: "http" | "mock";
+  execution_type: "http" | "mock" | "builtin";
   execution_config: Record<string, unknown>;
   is_enabled: boolean;
   created_at: string;

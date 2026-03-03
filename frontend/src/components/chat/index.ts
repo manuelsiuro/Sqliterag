@@ -4,3 +4,5 @@ export { MessageBubble } from "./MessageBubble";
 export { ChatInput } from "./ChatInput";
 export { CodeBlock } from "./CodeBlock";
 export { MarkdownRenderer } from "./MarkdownRenderer";
+export { ActionSuggestionCards } from "./ActionSuggestionCards";
+export { parseActionSuggestions } from "./parseActionSuggestions";

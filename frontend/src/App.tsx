@@ -1,74 +1,64 @@
-import { useState, useEffect } from "react";
-import { ErrorBoundary, Toast } from "@/components/common";
+import { useEffect } from "react";
+import { ErrorBoundary, Toast, Modal } from "@/components/common";
+import { TopBar } from "@/components/layout";
 import { Sidebar } from "@/components/sidebar";
 import { ChatWindow } from "@/components/chat";
 import { SettingsPanel } from "@/components/settings";
 import { DatabasePanel } from "@/components/database";
 import { ToolsPanel } from "@/components/tools";
 import { DocumentList } from "@/components/documents";
+import { GamePanel } from "@/components/rpg/GamePanel";
 import { useChatStore } from "@/store/chatStore";
 import { useSettingsStore } from "@/store/settingsStore";
+import { useUIStore } from "@/store/uiStore";
+
+const MODAL_TITLES: Record<string, string> = {
+  settings: "Settings",
+  tools: "Tools",
+  database: "Database",
+};
 
 function App() {
-  const [showSettings, setShowSettings] = useState(false);
-  const [showDatabase, setShowDatabase] = useState(false);
-  const [showTools, setShowTools] = useState(false);
   const { error, clearError } = useChatStore();
   const { loadLocalModels } = useSettingsStore();
+  const { activeModal, closeModal } = useUIStore();
 
   useEffect(() => {
     loadLocalModels();
   }, [loadLocalModels]);
 
-  const handleToggleSettings = () => {
-    setShowSettings((s) => !s);
-    setShowDatabase(false);
-    setShowTools(false);
-  };
-
-  const handleToggleDatabase = () => {
-    setShowDatabase((s) => !s);
-    setShowSettings(false);
-    setShowTools(false);
-  };
-
-  const handleToggleTools = () => {
-    setShowTools((s) => !s);
-    setShowSettings(false);
-    setShowDatabase(false);
-  };
-
   return (
     <ErrorBoundary>
-      <div className="flex h-screen bg-gray-950 text-white">
-        <Sidebar
-          onToggleSettings={handleToggleSettings}
-          onToggleDatabase={handleToggleDatabase}
-          onToggleTools={handleToggleTools}
-        />
-
-        <main className="flex-1 flex flex-col min-w-0">
-          <ChatWindow />
-        </main>
-
-        {showSettings && (
-          <div className="flex flex-col border-l border-gray-800">
-            <SettingsPanel onClose={() => setShowSettings(false)} />
-            <div className="w-80 border-t border-gray-800 p-4 bg-gray-900">
-              <h3 className="text-sm font-medium text-gray-300 mb-3">Documents (RAG)</h3>
-              <DocumentList />
-            </div>
-          </div>
-        )}
-
-        {showDatabase && (
-          <DatabasePanel onClose={() => setShowDatabase(false)} />
-        )}
-
-        {showTools && (
-          <ToolsPanel onClose={() => setShowTools(false)} />
-        )}
+      <div className="flex flex-col h-screen bg-gray-950 text-white">
+        <TopBar />
+        <div className="flex flex-1 min-h-0">
+          <Sidebar />
+          <main className="flex-1 flex flex-col min-w-0">
+            <ChatWindow />
+          </main>
+          <GamePanel />
+        </div>
       </div>
+
+      {activeModal && (
+        <Modal
+          open
+          title={MODAL_TITLES[activeModal] ?? ""}
+          onClose={closeModal}
+        >
+          {activeModal === "settings" && (
+            <div className="grid grid-cols-1 md:grid-cols-[1fr_300px] gap-6">
+              <SettingsPanel />
+              <div className="space-y-3">
+                <h3 className="text-sm font-medium text-gray-300">Documents (RAG)</h3>
+                <DocumentList />
+              </div>
+            </div>
+          )}
+          {activeModal === "tools" && <ToolsPanel />}
+          {activeModal === "database" && <DatabasePanel />}
+        </Modal>
+      )}
 
       {error && <Toast message={error} type="error" onClose={clearError} />}
     </ErrorBoundary>
