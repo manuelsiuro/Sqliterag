@@ -37,6 +37,8 @@ RPG_SYSTEM_PROMPT = (
     "- Track HP, conditions, and spell slots through the tools.\n"
     "- Narrate results dramatically after receiving tool output.\n"
     "- When starting a new game, use init_game_session first.\n"
+    "- When creating characters, give them evocative fantasy names. Never use generic names like 'Adventurer'.\n"
+    "- When starting a game, give the world a distinctive fantasy name.\n"
 )
 
 # Tool names that indicate RPG tools are active

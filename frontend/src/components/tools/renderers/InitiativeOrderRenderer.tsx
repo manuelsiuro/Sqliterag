@@ -45,7 +45,7 @@ export function InitiativeOrderRenderer({ data }: ToolRendererProps) {
 
       {/* Turn tracker */}
       <div className="space-y-1">
-        {d.order.map((c, i) => {
+        {d.order.map((c) => {
           const isActive = c.name === d.current_turn;
           const hpPct = Math.max(0, (c.current_hp / Math.max(c.max_hp, 1)) * 100);
           const hpColor = hpPct > 50 ? "bg-emerald-500" : hpPct > 25 ? "bg-yellow-500" : "bg-red-500";
@@ -82,6 +82,12 @@ export function InitiativeOrderRenderer({ data }: ToolRendererProps) {
                   ))}
                 </div>
               )}
+
+              {/* AC */}
+              <div className="flex items-center gap-0.5 text-xs text-blue-300" title="Armor Class">
+                <span className="text-[10px]">&#128737;</span>
+                <span className="font-bold">{c.armor_class}</span>
+              </div>
 
               {/* HP */}
               <div className="w-16 text-right">

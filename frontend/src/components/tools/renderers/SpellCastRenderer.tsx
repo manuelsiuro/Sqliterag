@@ -14,17 +14,6 @@ interface SpellData {
   error?: string;
 }
 
-const SCHOOL_COLORS: Record<string, string> = {
-  evocation: "from-orange-600 to-red-700",
-  necromancy: "from-green-700 to-emerald-900",
-  abjuration: "from-blue-600 to-blue-800",
-  transmutation: "from-yellow-600 to-amber-800",
-  enchantment: "from-pink-600 to-purple-800",
-  divination: "from-cyan-600 to-blue-800",
-  illusion: "from-violet-600 to-purple-800",
-  conjuration: "from-teal-600 to-cyan-800",
-};
-
 export function SpellCastRenderer({ data }: ToolRendererProps) {
   const d = data as unknown as SpellData;
 
@@ -61,7 +50,8 @@ export function SpellCastRenderer({ data }: ToolRendererProps) {
             {d.damage_rolls.map((r, i) => (
               <span
                 key={i}
-                className="w-6 h-6 rounded flex items-center justify-center text-xs font-bold bg-red-800/50 text-red-200 border border-red-700/40"
+                className="w-6 h-6 rounded flex items-center justify-center text-xs font-bold bg-red-800/50 text-red-200 border border-red-700/40 animate-item-appear"
+                style={{ animationDelay: `${i * 40}ms` }}
               >
                 {r}
               </span>

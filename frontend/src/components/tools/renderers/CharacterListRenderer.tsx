@@ -17,6 +17,13 @@ interface CharListData {
   count: number;
 }
 
+const RACE_ICONS: Record<string, string> = {
+  human: "\uD83D\uDC64", elf: "\uD83E\uDDDD", dwarf: "\u26CF\uFE0F",
+  halfling: "\uD83E\uDDB6", gnome: "\uD83D\uDD27", "half-elf": "\uD83C\uDF1F",
+  "half-orc": "\uD83D\uDCAA", tiefling: "\uD83D\uDD25", dragonborn: "\uD83D\uDC09",
+  orc: "\uD83D\uDC79",
+};
+
 export function CharacterListRenderer({ data }: ToolRendererProps) {
   const { characters, count } = data as unknown as CharListData;
 
@@ -31,24 +38,44 @@ export function CharacterListRenderer({ data }: ToolRendererProps) {
   return (
     <div className="mt-2 space-y-2">
       <div className="text-xs text-gray-500">{count} character{count !== 1 ? "s" : ""}</div>
-      {characters.map((c) => {
+      {characters.map((c, i) => {
         const hpPct = Math.max(0, (c.current_hp / Math.max(c.max_hp, 1)) * 100);
+        const raceIcon = RACE_ICONS[c.race.toLowerCase()] || "\uD83D\uDC64";
         return (
           <div
             key={c.name}
-            className={`flex items-center gap-3 bg-gray-800/50 rounded-lg px-3 py-2 border ${
+            className={`flex items-center gap-3 bg-gray-800/50 rounded-lg px-4 py-3 border animate-item-appear ${
               !c.is_alive ? "border-red-800/40 opacity-60" : "border-gray-700/40"
             }`}
+            style={{ animationDelay: `${i * 40}ms` }}
           >
-            {/* Name and class */}
+            {/* Name, level badge, race+class */}
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-medium text-white truncate">
-                {c.name}
-                {!c.is_alive && <span className="text-red-400 text-xs ml-1">(Dead)</span>}
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-white truncate">
+                  {c.name}
+                  {!c.is_alive && <span className="text-red-400 text-xs ml-1">(Dead)</span>}
+                </span>
+                <span className="text-[10px] px-1.5 py-px rounded-full bg-amber-900/40 text-amber-300 border border-amber-700/30 font-medium shrink-0">
+                  Lv {c.level}
+                </span>
               </div>
-              <div className="text-xs text-gray-500">
-                L{c.level} {c.race} {c.class}
+              <div className="flex items-center gap-1 text-xs text-gray-500 mt-0.5">
+                <span>{raceIcon}</span>
+                <span>{c.race}</span>
+                <span className="text-gray-600">{"\u00B7"}</span>
+                <span>{c.class}</span>
               </div>
+              {/* Conditions */}
+              {c.conditions && c.conditions.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {c.conditions.map((cond) => (
+                    <span key={cond} className="text-[9px] px-1.5 py-px rounded-full bg-red-900/40 text-red-300 border border-red-700/30">
+                      {cond}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Mini HP bar */}

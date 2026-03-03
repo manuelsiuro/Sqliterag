@@ -31,9 +31,9 @@ const BIOME_ICONS: Record<string, string> = {
 
 const DIR_ARROWS: Record<string, string> = {
   north: "\u2191", south: "\u2193", east: "\u2192", west: "\u2190",
-  up: "\u2197", down: "\u2199",
   northeast: "\u2197", northwest: "\u2196",
   southeast: "\u2198", southwest: "\u2199",
+  up: "\u2B06", down: "\u2B07",
 };
 
 export function LocationRenderer({ data }: ToolRendererProps) {
@@ -43,7 +43,9 @@ export function LocationRenderer({ data }: ToolRendererProps) {
     return <div className="mt-2 text-red-400 text-sm">{d.error}</div>;
   }
 
-  const exits = Object.entries(d.exits);
+  const exits = d.exits ? Object.entries(d.exits) : [];
+  const charsHere = d.characters_here ?? [];
+  const npcsHere = d.npcs_here ?? [];
 
   return (
     <div className="mt-2 space-y-2">
@@ -76,10 +78,11 @@ export function LocationRenderer({ data }: ToolRendererProps) {
       {exits.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           <span className="text-[10px] text-gray-500 self-center">Exits:</span>
-          {exits.map(([dir, loc]) => (
+          {exits.map(([dir, loc], i) => (
             <span
               key={dir}
-              className="text-xs px-2 py-0.5 rounded bg-gray-800 text-gray-300 border border-gray-700/50"
+              className="text-xs px-2 py-0.5 rounded bg-gray-800 text-gray-300 border border-gray-700/50 animate-item-appear"
+              style={{ animationDelay: `${i * 40}ms` }}
             >
               {DIR_ARROWS[dir] || "\u2022"} {dir} &rarr; {loc}
             </span>
@@ -88,18 +91,18 @@ export function LocationRenderer({ data }: ToolRendererProps) {
       )}
 
       {/* Who's here */}
-      {(d.characters_here.length > 0 || d.npcs_here.length > 0) && (
+      {(charsHere.length > 0 || npcsHere.length > 0) && (
         <div className="flex flex-wrap gap-1.5">
           <span className="text-[10px] text-gray-500 self-center">Present:</span>
-          {d.characters_here.map((c) => (
-            <span key={c} className="text-xs px-2 py-0.5 rounded bg-blue-900/30 text-blue-300 border border-blue-700/40">
+          {charsHere.map((c, i) => (
+            <span key={c} className="text-xs px-2 py-0.5 rounded bg-blue-900/30 text-blue-300 border border-blue-700/40 animate-item-appear" style={{ animationDelay: `${i * 40}ms` }}>
               {c}
             </span>
           ))}
-          {d.npcs_here.map((n) => {
+          {npcsHere.map((n, i) => {
             const name = typeof n === "string" ? n : n.name;
             return (
-              <span key={name} className="text-xs px-2 py-0.5 rounded bg-purple-900/30 text-purple-300 border border-purple-700/40">
+              <span key={name} className="text-xs px-2 py-0.5 rounded bg-purple-900/30 text-purple-300 border border-purple-700/40 animate-item-appear" style={{ animationDelay: `${(charsHere.length + i) * 40}ms` }}>
                 {name}
               </span>
             );

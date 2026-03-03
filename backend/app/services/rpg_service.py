@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import random
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -49,6 +50,63 @@ CONDITIONS = [
 ]
 
 ABILITY_NAMES = ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"]
+
+# ---------------------------------------------------------------------------
+# Fantasy Name Generation
+# ---------------------------------------------------------------------------
+
+WORLD_PREFIXES = [
+    "Storm", "Shadow", "Iron", "Myth", "Silver", "Thunder", "Ember", "Frost",
+    "Dragon", "Raven", "Crystal", "Obsidian", "Golden", "Ashen", "Thorn",
+    "Star", "Moon", "Sun", "Blood", "Stone", "Dusk", "Dawn", "Wyrd",
+    "Crimson", "Elder", "Hollow", "Mist", "Night", "Rune", "Wild",
+]
+
+WORLD_SUFFIXES = [
+    "hold", "vale", "reach", "march", "fell", "keep", "spire", "haven",
+    "moor", "dale", "heim", "gate", "crest", "forge", "watch", "peak",
+    "mere", "hollow", "shire", "wind", "gard", "run", "thorn", "bane",
+    "wood", "barrow", "deep", "crown", "stone", "port",
+]
+
+FANTASY_FIRST_NAMES = [
+    "Aldric", "Brynn", "Cedric", "Dahlia", "Elara", "Fenris", "Gwen",
+    "Halon", "Isolde", "Jareth", "Kael", "Lyra", "Maren", "Nyx",
+    "Orin", "Petra", "Quinn", "Rowan", "Sera", "Thane", "Una",
+    "Vex", "Wren", "Xara", "Yorick", "Zara", "Ashwin", "Bram",
+    "Cira", "Dorin", "Eira", "Finn", "Greta", "Holt", "Iris",
+    "Jace", "Kira", "Lox", "Mira", "Nolan", "Ophelia", "Pike",
+]
+
+FANTASY_SURNAMES = [
+    "Ashford", "Blackthorn", "Cindervane", "Duskwalker", "Emberheart",
+    "Frostbane", "Greymane", "Holloway", "Ironhand", "Jadecrest",
+    "Keenblade", "Lightweaver", "Moonwhisper", "Nightbloom", "Oakenshield",
+    "Proudstone", "Quicksilver", "Ravenscar", "Stormwind", "Thornfield",
+    "Underhill", "Voidgazer", "Windrunner", "Yarrow", "Zephyrblade",
+    "Brightforge", "Darkhollow", "Farrow", "Grimshaw", "Hawkstone",
+]
+
+_GENERIC_NAMES = {
+    "new adventurer", "adventurer", "player", "unnamed", "character",
+    "hero", "protagonist", "new character", "test", "player character",
+    "my character", "default", "unknown",
+}
+
+
+def generate_world_name() -> str:
+    """Generate a fantasy world name by combining a prefix and suffix."""
+    return random.choice(WORLD_PREFIXES) + random.choice(WORLD_SUFFIXES)
+
+
+def generate_character_name() -> str:
+    """Generate a fantasy character name."""
+    return f"{random.choice(FANTASY_FIRST_NAMES)} {random.choice(FANTASY_SURNAMES)}"
+
+
+def is_generic_name(name: str) -> bool:
+    """Check if a name is a placeholder/generic name that should be replaced."""
+    return name.strip().lower() in _GENERIC_NAMES
 
 
 # ---------------------------------------------------------------------------
@@ -124,7 +182,7 @@ async def get_or_create_session(db: AsyncSession, conversation_id: str) -> GameS
     )
     gs = result.scalars().first()
     if gs is None:
-        gs = GameSession(conversation_id=conversation_id)
+        gs = GameSession(conversation_id=conversation_id, world_name=generate_world_name())
         db.add(gs)
         await db.flush()
     return gs

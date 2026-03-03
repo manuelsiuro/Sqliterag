@@ -84,3 +84,12 @@ body {
 .animate-modal-content {
   animation: modal-content-in 0.2s ease-out both;
 }
+
+/* List-item entrance animation */
+@keyframes item-appear {
+  from { opacity: 0; transform: translateX(-8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.animate-item-appear {
+  animation: item-appear 0.2s ease-out both;
+}

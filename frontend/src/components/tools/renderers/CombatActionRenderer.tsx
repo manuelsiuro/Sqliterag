@@ -46,7 +46,7 @@ export function CombatActionRenderer({ data }: ToolRendererProps) {
           <span className="w-7 h-7 rounded flex items-center justify-center text-xs font-bold bg-purple-800/50 text-purple-200 border border-purple-700/40">
             {d.stealth_roll}
           </span>
-          <span className="text-gray-500">+{d.stealth_modifier}</span>
+          <span className="text-gray-500">{d.stealth_modifier! >= 0 ? "+" : ""}{d.stealth_modifier}</span>
           <span className="text-gray-300 font-medium">= {d.stealth_total}</span>
         </div>
       )}

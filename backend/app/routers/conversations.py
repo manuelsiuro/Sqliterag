@@ -10,7 +10,7 @@ from sqlalchemy.orm import selectinload
 from app.database import get_session
 from app.exceptions import NotFoundError
 from app.models.conversation import Conversation
-from app.models.rpg import Character, GameSession, Location, NPC, Quest
+from app.models.rpg import Character, GameSession, InventoryItem, Item, Location, NPC, Quest
 from app.schemas.conversation import (
     ConversationCreate,
     ConversationRead,
@@ -94,9 +94,28 @@ async def get_rpg_state(conversation_id: str, session: AsyncSession = Depends(ge
     if gs is None:
         return None
 
-    # Characters
+    # Characters with inventory
     result = await session.execute(select(Character).where(Character.session_id == gs.id))
-    chars = [character_to_dict(c) for c in result.scalars().all()]
+    chars = []
+    for c in result.scalars().all():
+        cd = character_to_dict(c)
+        # Fetch inventory for this character
+        inv_result = await session.execute(
+            select(InventoryItem, Item)
+            .join(Item, InventoryItem.item_id == Item.id)
+            .where(InventoryItem.character_id == c.id)
+        )
+        cd["inventory"] = [
+            {
+                "name": item.name,
+                "item_type": item.item_type,
+                "quantity": inv.quantity,
+                "is_equipped": inv.is_equipped,
+                "rarity": item.rarity,
+            }
+            for inv, item in inv_result.all()
+        ]
+        chars.append(cd)
 
     # Current location
     current_loc = None

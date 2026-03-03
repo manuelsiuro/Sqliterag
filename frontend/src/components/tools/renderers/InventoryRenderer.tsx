@@ -38,11 +38,20 @@ const RARITY_COLORS: Record<string, string> = {
   legendary: "text-yellow-400",
 };
 
-export function InventoryRenderer({ data }: ToolRendererProps) {
+export function InventoryRenderer({ data, rawContent }: ToolRendererProps) {
   const d = data as unknown as InventoryData;
 
   if (d.error) {
     return <div className="mt-2 text-red-400 text-sm">{d.error}</div>;
+  }
+
+  // Not a full inventory response (e.g. item_detail or transfer_result)
+  if (!d.items) {
+    return (
+      <pre className="mt-2 p-2 bg-gray-950/60 rounded-lg border border-gray-700/30 text-xs text-gray-300 overflow-x-auto whitespace-pre-wrap">
+        {rawContent}
+      </pre>
+    );
   }
 
   const weightPct = Math.min(100, (d.total_weight / Math.max(d.capacity, 1)) * 100);
@@ -78,10 +87,11 @@ export function InventoryRenderer({ data }: ToolRendererProps) {
         <div className="text-xs text-gray-500 italic">Empty inventory.</div>
       ) : (
         <div className="space-y-1">
-          {d.items.map((item) => (
+          {d.items.map((item, i) => (
             <div
               key={item.name}
-              className="flex items-center gap-2 bg-gray-800/40 rounded px-2 py-1.5 border border-gray-700/30"
+              className="flex items-center gap-2 bg-gray-800/40 rounded px-2 py-1.5 border border-gray-700/30 animate-item-appear"
+              style={{ animationDelay: `${i * 40}ms` }}
             >
               <span className="text-sm">{TYPE_ICONS[item.item_type] || "\uD83D\uDCE6"}</span>
               <span className={`text-sm flex-1 truncate ${RARITY_COLORS[item.rarity] || "text-gray-300"}`}>

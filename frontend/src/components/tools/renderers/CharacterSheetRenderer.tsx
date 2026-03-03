@@ -33,6 +33,13 @@ const ABILITY_ABBR: Record<string, string> = {
   intelligence: "INT", wisdom: "WIS", charisma: "CHA",
 };
 
+const RACE_ICONS: Record<string, string> = {
+  human: "\uD83D\uDC64", elf: "\uD83E\uDDDD", dwarf: "\u26CF\uFE0F",
+  halfling: "\uD83E\uDDB6", gnome: "\uD83D\uDD27", "half-elf": "\uD83C\uDF1F",
+  "half-orc": "\uD83D\uDCAA", tiefling: "\uD83D\uDD25", dragonborn: "\uD83D\uDC09",
+  orc: "\uD83D\uDC79",
+};
+
 export function CharacterSheetRenderer({ data }: ToolRendererProps) {
   const d = data as unknown as CharacterData;
 
@@ -48,10 +55,16 @@ export function CharacterSheetRenderer({ data }: ToolRendererProps) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <div className="text-lg font-bold text-white">{d.name}</div>
-          <div className="text-xs text-gray-400">
-            {d.race} {d.class} &middot; Level {d.level}
-            {!d.is_alive && <span className="text-red-400 ml-1">(Dead)</span>}
+          <div className="flex items-center gap-2">
+            <span className="text-lg font-bold text-white">{d.name}</span>
+            <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-900/40 text-amber-300 border border-amber-700/30 font-medium">
+              Lv {d.level}
+            </span>
+            {!d.is_alive && <span className="text-red-400 text-xs">(Dead)</span>}
+          </div>
+          <div className="text-xs text-gray-400 flex items-center gap-1 mt-0.5">
+            <span>{RACE_ICONS[d.race.toLowerCase()] || "\uD83D\uDC64"}</span>
+            <span>{d.race} {d.class}</span>
           </div>
         </div>
         <div className="flex items-center gap-3">

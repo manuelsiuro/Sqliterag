@@ -90,7 +90,7 @@ export function AttackResultRenderer({ data }: ToolRendererProps) {
       {d.hit && d.damage > 0 && (
         <div className="flex items-center gap-3 bg-red-900/20 rounded-lg px-3 py-2 border border-red-800/30">
           <div className="flex gap-1">
-            {d.damage_rolls.map((r, i) => (
+            {d.damage_rolls?.length > 0 && d.damage_rolls.map((r, i) => (
               <span
                 key={i}
                 className="w-7 h-7 rounded flex items-center justify-center text-xs font-bold bg-red-800/60 text-red-200 border border-red-700/50"
@@ -100,7 +100,10 @@ export function AttackResultRenderer({ data }: ToolRendererProps) {
             ))}
           </div>
           <span className="text-xs text-gray-500">+{d.damage_modifier}</span>
-          <span className="text-lg font-black text-red-300">{d.damage} dmg</span>
+          <span className="text-lg font-black text-red-300">
+            {d.damage} dmg
+            {d.critical && <span className="text-yellow-400 text-xs font-bold ml-1">(Critical - 2x dice)</span>}
+          </span>
           <span className="text-xs text-gray-500 ml-auto">{d.target}: {d.target_hp}</span>
         </div>
       )}

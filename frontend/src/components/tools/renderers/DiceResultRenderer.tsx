@@ -9,6 +9,10 @@ interface DiceData {
 export function DiceResultRenderer({ data }: ToolRendererProps) {
   const { rolls, modifier, total } = data as unknown as DiceData;
 
+  if (!rolls?.length) {
+    return <div className="mt-2 text-gray-500 text-sm">No rolls</div>;
+  }
+
   return (
     <div className="mt-2">
       {/* Dice row */}

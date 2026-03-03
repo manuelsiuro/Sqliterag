@@ -89,7 +89,7 @@ export function NPCRenderer({ data }: ToolRendererProps) {
         <div className="space-y-0.5">
           <div className="text-[10px] text-gray-500">Memories ({d.memory.length}):</div>
           {d.memory.slice(-3).map((m, i) => (
-            <div key={i} className="text-xs text-gray-400 pl-2 border-l border-gray-700">
+            <div key={i} className="text-xs text-gray-400 pl-2 border-l border-gray-700 animate-item-appear" style={{ animationDelay: `${i * 40}ms` }}>
               {m}
             </div>
           ))}

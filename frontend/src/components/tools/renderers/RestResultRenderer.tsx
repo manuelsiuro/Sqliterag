@@ -47,7 +47,8 @@ export function RestResultRenderer({ data }: ToolRendererProps) {
             {d.rolls.map((r, i) => (
               <span
                 key={i}
-                className="w-7 h-7 rounded flex items-center justify-center text-xs font-bold bg-blue-800/50 text-blue-200 border border-blue-700/40"
+                className="w-7 h-7 rounded flex items-center justify-center text-xs font-bold bg-blue-800/50 text-blue-200 border border-blue-700/40 animate-item-appear"
+                style={{ animationDelay: `${i * 40}ms` }}
               >
                 {r}
               </span>
