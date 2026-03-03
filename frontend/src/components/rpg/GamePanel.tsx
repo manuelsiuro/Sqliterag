@@ -171,7 +171,8 @@ function CharacterCard({ c }: { c: CharacterState }) {
             return (
               <div key={key} className="text-center flex-1">
                 <div className="text-[8px] text-gray-600">{abbr}</div>
-                <div className={`text-[10px] font-medium ${ab.modifier >= 0 ? "text-gray-300" : "text-red-400"}`}>
+                <div className="text-xs font-bold text-white">{ab.score}</div>
+                <div className={`text-[9px] ${ab.modifier >= 0 ? "text-gray-400" : "text-red-400"}`}>
                   {ab.modifier >= 0 ? "+" : ""}{ab.modifier}
                 </div>
               </div>
