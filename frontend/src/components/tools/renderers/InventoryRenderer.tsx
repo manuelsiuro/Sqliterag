@@ -38,20 +38,11 @@ const RARITY_COLORS: Record<string, string> = {
   legendary: "text-yellow-400",
 };
 
-export function InventoryRenderer({ data, rawContent }: ToolRendererProps) {
+export function InventoryRenderer({ data }: ToolRendererProps) {
   const d = data as unknown as InventoryData;
 
   if (d.error) {
     return <div className="mt-2 text-red-400 text-sm">{d.error}</div>;
-  }
-
-  // Not a full inventory response (e.g. item_detail or transfer_result)
-  if (!d.items) {
-    return (
-      <pre className="mt-2 p-2 bg-gray-950/60 rounded-lg border border-gray-700/30 text-xs text-gray-300 overflow-x-auto whitespace-pre-wrap">
-        {rawContent}
-      </pre>
-    );
   }
 
   const weightPct = Math.min(100, (d.total_weight / Math.max(d.capacity, 1)) * 100);

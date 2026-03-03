@@ -103,6 +103,100 @@ function capitalize(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+function CharacterCard({ c }: { c: CharacterState }) {
+  const hpPct = Math.max(0, (c.current_hp / Math.max(c.max_hp, 1)) * 100);
+  const raceIcon = RACE_ICONS[c.race.toLowerCase()] || "\uD83D\uDC64";
+  const classIcon = CLASS_ICONS[c.class.toLowerCase()] || "\u2694\uFE0F";
+
+  return (
+    <div
+      className={`bg-gray-800/50 rounded-lg px-3 py-2.5 border ${
+        !c.is_alive ? "border-red-800/40 opacity-50" : "border-gray-700/40"
+      }`}
+    >
+      {/* Row 1: Name + Dead indicator */}
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-bold text-white truncate">
+          {c.name}
+          {!c.is_alive && <span className="text-red-400 text-xs ml-1 font-normal">(Dead)</span>}
+        </span>
+      </div>
+
+      {/* Row 2: Race + Class with level badge */}
+      <div className="flex items-center gap-1.5 mt-0.5">
+        <span className="text-[11px]">{raceIcon}</span>
+        <span className="text-[11px] text-gray-400">{c.race}</span>
+        <span className="text-gray-600 text-[10px]">{"\u00B7"}</span>
+        <span className="text-[11px]">{classIcon}</span>
+        <span className="text-[11px] text-gray-400">{c.class}</span>
+        <span className="text-[10px] px-1.5 py-px rounded-full bg-amber-900/40 text-amber-300 border border-amber-700/30 font-medium ml-auto">
+          Lv {c.level}
+        </span>
+      </div>
+
+      {/* Row 3: AC + Speed */}
+      <div className="flex items-center gap-3 mt-1.5">
+        <div className="flex items-center gap-1">
+          <span className="text-[10px] text-gray-500">AC</span>
+          <span className="text-xs font-bold text-blue-300">{c.armor_class}</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <span className="text-[10px] text-gray-500">SPD</span>
+          <span className="text-xs font-medium text-gray-300">{c.speed}ft</span>
+        </div>
+      </div>
+
+      {/* Row 4: HP bar */}
+      <div className="flex items-center gap-2 mt-1.5">
+        <div className="flex-1 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+          <div
+            className={`h-full rounded-full transition-all ${
+              hpPct > 50 ? "bg-emerald-500" : hpPct > 25 ? "bg-yellow-500" : "bg-red-500"
+            }`}
+            style={{ width: `${hpPct}%` }}
+          />
+        </div>
+        <span className="text-[10px] text-gray-500 whitespace-nowrap">
+          {c.current_hp}/{c.max_hp}
+          {c.temp_hp > 0 && <span className="text-blue-400"> +{c.temp_hp}</span>}
+        </span>
+      </div>
+
+      {/* Row 5: Mini ability scores */}
+      {c.abilities && (
+        <div className="flex gap-1 mt-1.5">
+          {Object.entries(ABILITY_ABBR).map(([key, abbr]) => {
+            const ab = c.abilities[key];
+            if (!ab) return null;
+            return (
+              <div key={key} className="text-center flex-1">
+                <div className="text-[8px] text-gray-600">{abbr}</div>
+                <div className={`text-[10px] font-medium ${ab.modifier >= 0 ? "text-gray-300" : "text-red-400"}`}>
+                  {ab.modifier >= 0 ? "+" : ""}{ab.modifier}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Row 6: Conditions */}
+      {c.conditions && c.conditions.length > 0 && (
+        <div className="flex flex-wrap gap-1 mt-1.5">
+          {c.conditions.map((cond) => (
+            <span key={cond} className="text-[9px] px-1.5 py-px rounded-full bg-red-900/40 text-red-300 border border-red-700/30">
+              {cond}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Row 7: Collapsible Inventory */}
+      {c.inventory && <InventorySection inventory={c.inventory} />}
+    </div>
+  );
+}
+
 function InventorySection({ inventory }: { inventory: InventoryItem[] }) {
   const [open, setOpen] = useState(false);
 
@@ -259,99 +353,9 @@ export function GamePanel() {
                   Party ({playerChars.length})
                 </h3>
                 <div className="space-y-2">
-                  {playerChars.map((c) => {
-                    const hpPct = Math.max(0, (c.current_hp / Math.max(c.max_hp, 1)) * 100);
-                    const raceIcon = RACE_ICONS[c.race.toLowerCase()] || "\uD83D\uDC64";
-                    const classIcon = CLASS_ICONS[c.class.toLowerCase()] || "\u2694\uFE0F";
-                    return (
-                      <div
-                        key={c.name}
-                        className={`bg-gray-800/50 rounded-lg px-3 py-2.5 border ${
-                          !c.is_alive ? "border-red-800/40 opacity-50" : "border-gray-700/40"
-                        }`}
-                      >
-                        {/* Row 1: Name + Dead indicator */}
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-bold text-white truncate">
-                            {c.name}
-                            {!c.is_alive && <span className="text-red-400 text-xs ml-1 font-normal">(Dead)</span>}
-                          </span>
-                        </div>
-
-                        {/* Row 2: Race + Class with level badge */}
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          <span className="text-[11px]">{raceIcon}</span>
-                          <span className="text-[11px] text-gray-400">{c.race}</span>
-                          <span className="text-gray-600 text-[10px]">{"\u00B7"}</span>
-                          <span className="text-[11px]">{classIcon}</span>
-                          <span className="text-[11px] text-gray-400">{c.class}</span>
-                          <span className="text-[10px] px-1.5 py-px rounded-full bg-amber-900/40 text-amber-300 border border-amber-700/30 font-medium ml-auto">
-                            Lv {c.level}
-                          </span>
-                        </div>
-
-                        {/* Row 3: AC + Speed */}
-                        <div className="flex items-center gap-3 mt-1.5">
-                          <div className="flex items-center gap-1">
-                            <span className="text-[10px] text-gray-500">AC</span>
-                            <span className="text-xs font-bold text-blue-300">{c.armor_class}</span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <span className="text-[10px] text-gray-500">SPD</span>
-                            <span className="text-xs font-medium text-gray-300">{c.speed}ft</span>
-                          </div>
-                        </div>
-
-                        {/* Row 4: HP bar */}
-                        <div className="flex items-center gap-2 mt-1.5">
-                          <div className="flex-1 h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full rounded-full transition-all ${
-                                hpPct > 50 ? "bg-emerald-500" : hpPct > 25 ? "bg-yellow-500" : "bg-red-500"
-                              }`}
-                              style={{ width: `${hpPct}%` }}
-                            />
-                          </div>
-                          <span className="text-[10px] text-gray-500 whitespace-nowrap">
-                            {c.current_hp}/{c.max_hp}
-                            {c.temp_hp > 0 && <span className="text-blue-400"> +{c.temp_hp}</span>}
-                          </span>
-                        </div>
-
-                        {/* Row 5: Mini ability scores */}
-                        {c.abilities && (
-                          <div className="flex gap-1 mt-1.5">
-                            {Object.entries(ABILITY_ABBR).map(([key, abbr]) => {
-                              const ab = c.abilities[key];
-                              if (!ab) return null;
-                              return (
-                                <div key={key} className="text-center flex-1">
-                                  <div className="text-[8px] text-gray-600">{abbr}</div>
-                                  <div className={`text-[10px] font-medium ${ab.modifier >= 0 ? "text-gray-300" : "text-red-400"}`}>
-                                    {ab.modifier >= 0 ? "+" : ""}{ab.modifier}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-
-                        {/* Row 6: Conditions */}
-                        {c.conditions && c.conditions.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mt-1.5">
-                            {c.conditions.map((cond) => (
-                              <span key={cond} className="text-[9px] px-1.5 py-px rounded-full bg-red-900/40 text-red-300 border border-red-700/30">
-                                {cond}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-
-                        {/* Row 7: Collapsible Inventory */}
-                        {c.inventory && <InventorySection inventory={c.inventory} />}
-                      </div>
-                    );
-                  })}
+                  {playerChars.map((c) => (
+                    <CharacterCard key={c.name} c={c} />
+                  ))}
                 </div>
               </section>
             )}
@@ -362,34 +366,10 @@ export function GamePanel() {
                 <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">
                   Creatures ({creatures.length})
                 </h3>
-                <div className="space-y-1.5">
-                  {creatures.map((c) => {
-                    const hpPct = Math.max(0, (c.current_hp / Math.max(c.max_hp, 1)) * 100);
-                    return (
-                      <div
-                        key={c.name}
-                        className={`bg-gray-800/50 rounded-lg px-3 py-1.5 border ${
-                          !c.is_alive ? "border-red-800/40 opacity-50" : "border-gray-700/40"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-gray-200">{c.name}</span>
-                          <span className="text-[10px] text-gray-500">L{c.level} {c.class}</span>
-                        </div>
-                        <div className="flex items-center gap-2 mt-1">
-                          <div className="flex-1 h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full rounded-full transition-all ${
-                                hpPct > 50 ? "bg-emerald-500" : hpPct > 25 ? "bg-yellow-500" : "bg-red-500"
-                              }`}
-                              style={{ width: `${hpPct}%` }}
-                            />
-                          </div>
-                          <span className="text-[10px] text-gray-500">{c.current_hp}/{c.max_hp}</span>
-                        </div>
-                      </div>
-                    );
-                  })}
+                <div className="space-y-2">
+                  {creatures.map((c) => (
+                    <CharacterCard key={c.name} c={c} />
+                  ))}
                 </div>
               </section>
             )}

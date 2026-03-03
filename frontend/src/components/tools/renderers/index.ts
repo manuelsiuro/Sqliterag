@@ -45,8 +45,9 @@ registerToolRenderer("heal_result", HealResultRenderer);
 
 // Phase 4 — Inventory
 import { InventoryRenderer } from "./InventoryRenderer";
+import { ItemDetailRenderer } from "./ItemDetailRenderer";
 registerToolRenderer("inventory", InventoryRenderer);
-registerToolRenderer("item_detail", InventoryRenderer);
+registerToolRenderer("item_detail", ItemDetailRenderer);
 registerToolRenderer("transfer_result", InventoryRenderer);
 
 // Phase 5 — World & Spatial
