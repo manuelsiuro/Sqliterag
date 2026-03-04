@@ -66,8 +66,15 @@ class ChatService:
         session.add(user_msg)
         await session.flush()
 
+        # Merge default model parameters with user overrides (user wins)
+        merged_options = dict(settings.default_model_parameters)
+        merged_options["num_ctx"] = settings.default_num_ctx
+        if options:
+            merged_options.update(options)
+        options = merged_options
+
         # Initialize token budget
-        num_ctx = (options or {}).get("num_ctx", settings.default_num_ctx)
+        num_ctx = options.get("num_ctx", settings.default_num_ctx)
         budget = TokenBudget(num_ctx=num_ctx)
 
         # Build message history
@@ -120,7 +127,7 @@ class ChatService:
                 messages.insert(0, {"role": "system", "content": dynamic_prompt})
                 budget.system_prompt_tokens = estimate_tokens(dynamic_prompt)
 
-        kwargs = {}
+        kwargs = {"think": False}
         if options:
             kwargs["options"] = options
 

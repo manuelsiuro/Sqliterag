@@ -45,6 +45,7 @@ RPG_TOOL_NAMES = {
 
 # Static fallback — identical to the old RPG_SYSTEM_PROMPT
 _STATIC_FALLBACK = (
+    "/nothink\n"
     "You are a Dungeon Master running a D&D 5e game. You have access to RPG tools that enforce game rules. "
     "IMPORTANT RULES:\n"
     "- Always use the tools to modify game state. Never just narrate mechanical changes.\n"
@@ -165,6 +166,7 @@ def filter_tools_by_phase(tools: list, phase: GamePhase) -> list:
 
 def _build_layer1_identity() -> str:
     return (
+        "/nothink\n"
         "You are a Dungeon Master running a D&D 5e game. "
         "You have RPG tools that enforce all game rules.\n"
         "ABSOLUTE RULES:\n"

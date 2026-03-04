@@ -13,6 +13,8 @@ class ModelParameters(BaseModel):
     num_ctx: int | None = None
     repeat_penalty: float | None = None
     seed: int | None = None
+    presence_penalty: float | None = None
+    num_predict: int | None = None
 
 
 class MessageCreate(BaseModel):

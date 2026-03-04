@@ -19,7 +19,7 @@ export function DiceRollRenderer({ data }: ToolRendererProps) {
     data as unknown as DiceRollData;
 
   return (
-    <div className="mt-2 space-y-3">
+    <div className="mt-2 bg-gray-800/30 rounded-lg px-3 py-2.5 border border-gray-700/30 space-y-3">
       {/* Header */}
       <div className="flex items-center gap-2 text-sm text-gray-400">
         <span className="font-mono bg-gray-800 px-2 py-0.5 rounded">{notation}</span>

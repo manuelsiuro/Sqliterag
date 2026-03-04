@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import AsyncGenerator
 
 import httpx
 
 from app.config import settings
 from app.services.base import BaseEmbeddingService, BaseLLMService
+
+_THINK_BLOCK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +28,7 @@ class OllamaService(BaseLLMService, BaseEmbeddingService):
 
     async def chat_stream(self, model: str, messages: list[dict], **kwargs) -> AsyncGenerator[str]:
         payload = {"model": model, "messages": messages, "stream": True, **kwargs}
+        in_think = False
         async with (
             httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client,
             client.stream("POST", f"{self.base_url}/api/chat", json=payload) as resp,
@@ -36,6 +40,17 @@ class OllamaService(BaseLLMService, BaseEmbeddingService):
 
                     chunk = json.loads(line)
                     if content := chunk.get("message", {}).get("content", ""):
+                        # Strip leaked <think> blocks from streaming chunks
+                        if "<think>" in content:
+                            in_think = True
+                        if in_think:
+                            if "</think>" in content:
+                                in_think = False
+                                # Emit anything after the closing tag
+                                after = content.split("</think>", 1)[1]
+                                if after:
+                                    yield after
+                            continue
                         yield content
                     if chunk.get("done"):
                         return
@@ -45,7 +60,11 @@ class OllamaService(BaseLLMService, BaseEmbeddingService):
         async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
             resp = await client.post(f"{self.base_url}/api/chat", json=payload)
             resp.raise_for_status()
-            return resp.json().get("message", {})
+            message = resp.json().get("message", {})
+            # Strip leaked <think> blocks from non-streaming response
+            if message.get("content"):
+                message["content"] = _THINK_BLOCK_RE.sub("", message["content"]).strip()
+            return message
 
     async def show_model(self, name: str) -> dict:
         async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:

@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict
 
 class ConversationCreate(BaseModel):
     title: str = "New Chat"
-    model: str = "llama3.2"
+    model: str = "qwen3.5:9b"
 
 
 class ConversationUpdate(BaseModel):

@@ -60,6 +60,8 @@ async def get_game_state(
                 "quantity": inv.quantity,
                 "is_equipped": inv.is_equipped,
                 "rarity": item.rarity,
+                "weight": float(item.weight),
+                "value_gp": float(item.value_gp),
             }
             for inv, item in inv_result.all()
         ]

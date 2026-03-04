@@ -2,6 +2,31 @@ import { create } from "zustand";
 import { api } from "@/services/api";
 import type { LocalModel, ModelDetail, ModelParameters, ModelSearchResult } from "@/types";
 
+const ALL_NULL_PARAMS: ModelParameters = {
+  temperature: null,
+  top_p: null,
+  top_k: null,
+  num_ctx: null,
+  repeat_penalty: null,
+  seed: null,
+  presence_penalty: null,
+  num_predict: null,
+};
+
+export const QWEN3_DEFAULTS: Partial<ModelParameters> = {
+  temperature: 0.7,
+  top_p: 0.8,
+  top_k: 20,
+  presence_penalty: 1.5,
+  num_predict: 2048,
+};
+
+function isQwenFamily(family: string | null | undefined): boolean {
+  if (!family) return false;
+  const f = family.toLowerCase();
+  return f.startsWith("qwen3") || f.startsWith("qwen35");
+}
+
 interface SettingsState {
   settings: Record<string, string>;
   localModels: LocalModel[];
@@ -20,6 +45,7 @@ interface SettingsState {
   pullModel: (name: string) => void;
   loadModelDetail: (modelName: string) => Promise<void>;
   updateModelParameters: (params: Partial<ModelParameters>) => void;
+  resetModelParameters: () => void;
 }
 
 export const useSettingsStore = create<SettingsState>((set) => ({
@@ -38,6 +64,8 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     num_ctx: null,
     repeat_penalty: null,
     seed: null,
+    presence_penalty: null,
+    num_predict: null,
   },
 
   loadSettings: async () => {
@@ -90,10 +118,21 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   },
 
   loadModelDetail: async (modelName: string) => {
+    const currentDetail = useSettingsStore.getState().selectedModelDetail;
+    const modelChanged = currentDetail?.name !== modelName;
+
     set({ isLoadingModelDetail: true, selectedModelDetail: null });
     try {
       const detail = await api.getModelDetails(modelName);
       set({ selectedModelDetail: detail, isLoadingModelDetail: false });
+
+      if (modelChanged) {
+        if (isQwenFamily(detail.family)) {
+          set({ modelParameters: { ...ALL_NULL_PARAMS, ...QWEN3_DEFAULTS } });
+        } else {
+          set({ modelParameters: { ...ALL_NULL_PARAMS } });
+        }
+      }
     } catch {
       set({ selectedModelDetail: null, isLoadingModelDetail: false });
     }
@@ -101,5 +140,9 @@ export const useSettingsStore = create<SettingsState>((set) => ({
 
   updateModelParameters: (params: Partial<ModelParameters>) => {
     set((s) => ({ modelParameters: { ...s.modelParameters, ...params } }));
+  },
+
+  resetModelParameters: () => {
+    set({ modelParameters: { ...ALL_NULL_PARAMS } });
   },
 }));

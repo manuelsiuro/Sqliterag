@@ -48,7 +48,7 @@ export function InventoryRenderer({ data }: ToolRendererProps) {
   const weightPct = Math.min(100, (d.total_weight / Math.max(d.capacity, 1)) * 100);
 
   return (
-    <div className="mt-2 space-y-2">
+    <div className="mt-2 bg-gray-800/30 rounded-lg px-3 py-2.5 border border-gray-700/30 space-y-2">
       {/* Header */}
       <div className="flex items-center justify-between">
         <span className="text-sm font-medium text-amber-300">{d.character}'s Inventory</span>

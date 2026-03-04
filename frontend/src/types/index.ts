@@ -58,6 +58,8 @@ export interface ModelParameters {
   num_ctx: number | null;
   repeat_penalty: number | null;
   seed: number | null;
+  presence_penalty: number | null;
+  num_predict: number | null;
 }
 
 export interface ModelSearchResult {

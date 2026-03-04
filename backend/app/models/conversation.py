@@ -14,7 +14,7 @@ class Conversation(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     title: Mapped[str] = mapped_column(String(255), default="New Chat")
-    model: Mapped[str] = mapped_column(String(100), default="llama3.2")
+    model: Mapped[str] = mapped_column(String(100), default="qwen3.5:9b")
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
 

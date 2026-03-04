@@ -27,7 +27,7 @@ export function InitiativeOrderRenderer({ data }: ToolRendererProps) {
   }
 
   return (
-    <div className="mt-2 space-y-2">
+    <div className="mt-2 bg-gray-800/30 rounded-lg px-3 py-2.5 border border-gray-700/30 space-y-2">
       {/* Round counter */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">

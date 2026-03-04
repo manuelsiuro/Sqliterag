@@ -13,6 +13,8 @@ interface InventoryItem {
   quantity: number;
   is_equipped: boolean;
   rarity: string;
+  weight?: number;
+  value_gp?: number;
 }
 
 interface CharacterState {
@@ -222,9 +224,9 @@ function InventorySection({ inventory }: { inventory: InventoryItem[] }) {
       {open && (
         <div className="mt-1 space-y-0.5 pl-2">
           {sorted.map((item, i) => (
-            <div key={i} className="flex items-center gap-1.5 text-[10px]">
+            <div key={i} className="flex items-center gap-1.5 text-[10px] bg-gray-800/40 rounded px-1.5 py-1 border border-gray-700/20">
               <span>{TYPE_ICONS[item.item_type] || "\uD83D\uDCE6"}</span>
-              <span className={RARITY_COLORS[item.rarity] || "text-gray-400"}>
+              <span className={`flex-1 truncate ${RARITY_COLORS[item.rarity] || "text-gray-400"}`}>
                 {item.name}
                 {item.quantity > 1 && ` x${item.quantity}`}
               </span>
@@ -232,6 +234,12 @@ function InventorySection({ inventory }: { inventory: InventoryItem[] }) {
                 <span className="text-[9px] px-1 py-px rounded bg-amber-900/40 text-amber-400 border border-amber-700/30">
                   E
                 </span>
+              )}
+              {item.weight != null && (
+                <span className="text-gray-600">{item.weight}lb</span>
+              )}
+              {item.value_gp != null && (
+                <span className="text-yellow-600">{item.value_gp}gp</span>
               )}
             </div>
           ))}

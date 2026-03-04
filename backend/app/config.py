@@ -23,8 +23,17 @@ class Settings(BaseSettings):
     database_url: str = f"sqlite+aiosqlite:///{BASE_DIR / 'sqliterag.db'}"
 
     # Models
-    default_model: str = "llama3.2"
+    default_model: str = "qwen3.5:9b"
     embedding_model: str = "nomic-embed-text"
+
+    # Default generation parameters (Qwen3.5:9b-optimized)
+    default_model_parameters: dict = {
+        "temperature": 0.7,
+        "top_p": 0.8,
+        "top_k": 20,
+        "presence_penalty": 1.5,
+        "num_predict": 2048,
+    }
 
     # RAG
     chunk_size: int = 500

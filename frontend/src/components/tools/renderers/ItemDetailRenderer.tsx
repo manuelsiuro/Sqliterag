@@ -96,7 +96,7 @@ export function ItemDetailRenderer({ data }: ToolRendererProps) {
   const glowCls = RARITY_GLOW[d.rarity] || "";
 
   const props = d.properties && typeof d.properties === "object"
-    ? Object.entries(d.properties)
+    ? Object.entries(d.properties).filter(([key]) => key !== "rarity" && key !== "type")
     : [];
 
   return (

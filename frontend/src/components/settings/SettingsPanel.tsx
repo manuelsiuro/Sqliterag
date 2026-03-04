@@ -8,7 +8,7 @@ import { api } from "@/services/api";
 export function SettingsPanel() {
   const { activeConversationId, conversations } = useChatStore();
   const activeConv = conversations.find((c) => c.id === activeConversationId);
-  const currentModel = activeConv?.model || "llama3.2";
+  const currentModel = activeConv?.model || "qwen3.5:9b";
 
   const handleModelChange = async (model: string) => {
     if (activeConversationId) {
