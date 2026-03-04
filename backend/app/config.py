@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     chunk_overlap: int = 50
     rag_top_k: int = 5
 
+    # Context window
+    default_num_ctx: int = 8192
+
     # Server
     host: str = "0.0.0.0"
     port: int = 8000

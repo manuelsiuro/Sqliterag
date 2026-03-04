@@ -10,10 +10,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from sse_starlette.sse import ServerSentEvent
 
+from app.config import settings
 from app.models.message import Message
 from app.models.tool import ConversationTool, Tool
 from app.services.base import BaseLLMService
 from app.services.rag_service import RAGService
+from app.services.token_utils import (
+    TokenBudget,
+    estimate_message_tokens,
+    estimate_tokens,
+    estimate_tool_definitions_tokens,
+    truncate_history,
+)
 from app.services.tool_service import ToolService
 
 logger = logging.getLogger(__name__)
@@ -74,6 +82,10 @@ class ChatService:
         session.add(user_msg)
         await session.flush()
 
+        # Initialize token budget
+        num_ctx = (options or {}).get("num_ctx", settings.default_num_ctx)
+        budget = TokenBudget(num_ctx=num_ctx)
+
         # Build message history
         result = await session.execute(
             select(Message)
@@ -91,6 +103,10 @@ class ChatService:
                 msg["tool_name"] = m.tool_name
             messages.append(msg)
 
+        budget.conversation_history_tokens = sum(
+            estimate_message_tokens(m) for m in messages
+        )
+
         # Try RAG context injection
         try:
             context_chunks = await self.rag_service.retrieve_context(session, user_message)
@@ -98,6 +114,7 @@ class ChatService:
                 context_text = "\n---\n".join(context_chunks)
                 rag_system = RAG_SYSTEM_TEMPLATE.format(context=context_text)
                 messages.insert(0, {"role": "system", "content": rag_system})
+                budget.rag_context_tokens = estimate_tokens(rag_system)
                 logger.info("Injected %d RAG chunks into context", len(context_chunks))
         except Exception:
             logger.warning("RAG retrieval failed, proceeding without context", exc_info=True)
@@ -110,6 +127,7 @@ class ChatService:
             tool_names = {t.name for t in conv_tools}
             if tool_names & _RPG_TOOL_NAMES:
                 messages.insert(0, {"role": "system", "content": RPG_SYSTEM_PROMPT})
+                budget.system_prompt_tokens = estimate_tokens(RPG_SYSTEM_PROMPT)
 
         kwargs = {}
         if options:
@@ -118,9 +136,18 @@ class ChatService:
         if conv_tools:
             # === Agent loop with tool calling (non-streaming) ===
             ollama_tools = self.tool_service.build_ollama_tools(conv_tools)
+            budget.tool_definitions_tokens = estimate_tool_definitions_tokens(ollama_tools)
+            messages = truncate_history(messages, budget)
+            budget.log_summary()
             tool_map = {t.name: t for t in conv_tools}
 
             for _round in range(MAX_TOOL_ROUNDS):
+                if budget.tokens_remaining < 0:
+                    logger.warning(
+                        "Agent round %d: token budget already exceeded by %d tokens",
+                        _round,
+                        -budget.tokens_remaining,
+                    )
                 try:
                     response = await self.llm_service.chat(
                         model, messages, tools=ollama_tools, **kwargs
@@ -159,11 +186,13 @@ class ChatService:
                     )
 
                     # Append assistant message to context
-                    messages.append({
+                    assistant_ctx = {
                         "role": "assistant",
                         "content": content or "",
                         "tool_calls": tool_calls,
-                    })
+                    }
+                    messages.append(assistant_ctx)
+                    budget.conversation_history_tokens += estimate_message_tokens(assistant_ctx)
 
                     # Execute each tool call
                     for tc in tool_calls:
@@ -202,11 +231,13 @@ class ChatService:
                         )
 
                         # Append tool result to context
-                        messages.append({
+                        tool_ctx = {
                             "role": "tool",
                             "content": tool_result,
                             "tool_name": tool_name,
-                        })
+                        }
+                        messages.append(tool_ctx)
+                        budget.conversation_history_tokens += estimate_message_tokens(tool_ctx)
                 else:
                     # Final text response — chunk into token-like SSE events
                     for i in range(0, len(content), TOKEN_CHUNK_SIZE):
@@ -245,6 +276,8 @@ class ChatService:
             )
         else:
             # === Original streaming path (no tools) ===
+            messages = truncate_history(messages, budget)
+            budget.log_summary()
             full_response = ""
             try:
                 async for token in self.llm_service.chat_stream(model, messages, **kwargs):
