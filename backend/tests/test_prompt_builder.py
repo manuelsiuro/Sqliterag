@@ -1,0 +1,342 @@
+"""Tests for the dynamic RPG system prompt builder."""
+
+from __future__ import annotations
+
+import json
+
+import pytest
+
+from app.models.rpg import Character, GameSession, Location, NPC, Quest
+from app.services.prompt_builder import (
+    GamePhase,
+    _STATIC_FALLBACK,
+    _build_layer1_identity,
+    _build_layer2_jit_rules,
+    _build_layer3_state,
+    _build_layer4_format,
+    build_rpg_system_prompt,
+    detect_phase,
+    extract_recent_tool_names,
+)
+
+
+# --- detect_phase ---
+
+
+class TestDetectPhase:
+    def test_combat_state_present(self):
+        assert detect_phase('{"turn": 1}', set()) is GamePhase.COMBAT
+
+    def test_combat_state_overrides_social_tools(self):
+        assert detect_phase('{"turn": 1}', {"talk_to_npc"}) is GamePhase.COMBAT
+
+    def test_talk_to_npc_triggers_social(self):
+        assert detect_phase(None, {"talk_to_npc"}) is GamePhase.SOCIAL
+
+    def test_update_npc_relationship_triggers_social(self):
+        assert detect_phase(None, {"update_npc_relationship"}) is GamePhase.SOCIAL
+
+    def test_default_exploration(self):
+        assert detect_phase(None, set()) is GamePhase.EXPLORATION
+
+    def test_non_social_tools_stay_exploration(self):
+        assert detect_phase(None, {"roll_check", "move_to"}) is GamePhase.EXPLORATION
+
+
+# --- extract_recent_tool_names ---
+
+
+class TestExtractRecentToolNames:
+    def test_extracts_from_tool_messages(self):
+        messages = [
+            {"role": "user", "content": "attack"},
+            {"role": "assistant", "content": "", "tool_calls": [{"function": {"name": "attack"}}]},
+            {"role": "tool", "content": '{"type":"attack_result"}', "tool_name": "attack"},
+            {"role": "tool", "content": '{"type":"roll_dice"}', "tool_name": "roll_dice"},
+        ]
+        result = extract_recent_tool_names(messages)
+        assert result == {"attack", "roll_dice"}
+
+    def test_respects_lookback_limit(self):
+        messages = [
+            {"role": "tool", "content": "a", "tool_name": "tool_a"},
+            {"role": "tool", "content": "b", "tool_name": "tool_b"},
+            {"role": "tool", "content": "c", "tool_name": "tool_c"},
+            {"role": "tool", "content": "d", "tool_name": "tool_d"},
+        ]
+        result = extract_recent_tool_names(messages, lookback=2)
+        # Should get the last 2: tool_d and tool_c
+        assert result == {"tool_c", "tool_d"}
+
+    def test_handles_empty_messages(self):
+        assert extract_recent_tool_names([]) == set()
+
+    def test_skips_non_tool_messages(self):
+        messages = [
+            {"role": "user", "content": "hi"},
+            {"role": "assistant", "content": "hello"},
+        ]
+        assert extract_recent_tool_names(messages) == set()
+
+    def test_skips_tool_without_tool_name(self):
+        messages = [
+            {"role": "tool", "content": "result"},
+        ]
+        assert extract_recent_tool_names(messages) == set()
+
+
+# --- Layer builders (unit) ---
+
+
+class TestLayerBuilders:
+    def test_layer1_contains_core_rules(self):
+        text = _build_layer1_identity()
+        assert "Dungeon Master" in text
+        assert "D&D 5e" in text
+        assert "create_character" in text
+
+    def test_layer2_combat(self):
+        text = _build_layer2_jit_rules(GamePhase.COMBAT)
+        assert "COMBAT" in text
+        assert "initiative" in text.lower()
+
+    def test_layer2_social(self):
+        text = _build_layer2_jit_rules(GamePhase.SOCIAL)
+        assert "SOCIAL" in text
+        assert "talk_to_npc" in text
+
+    def test_layer2_exploration(self):
+        text = _build_layer2_jit_rules(GamePhase.EXPLORATION)
+        assert "EXPLORATION" in text
+        assert "look_around" in text
+
+    def test_layer4_format(self):
+        text = _build_layer4_format()
+        assert "2nd person" in text
+        assert "200 words" in text
+
+
+# --- _build_layer3_state (DB-backed) ---
+
+
+class TestBuildLayer3State:
+    @pytest.fixture
+    async def game_data(self, session):
+        """Create a GameSession with characters, location, NPCs, and quests."""
+        gs = GameSession(
+            conversation_id="test-conv-1",
+            world_name="Stonebane",
+            environment='{"time_of_day":"day","weather":"clear","season":"summer"}',
+        )
+        session.add(gs)
+        await session.flush()
+
+        loc = Location(
+            session_id=gs.id,
+            name="The Great Hall",
+            biome="dungeon",
+            exits="{}",
+        )
+        session.add(loc)
+        await session.flush()
+
+        gs.current_location_id = loc.id
+
+        char = Character(
+            session_id=gs.id,
+            name="Thorin Ironforge",
+            char_class="Fighter",
+            level=1,
+            max_hp=10,
+            current_hp=10,
+            armor_class=16,
+        )
+        session.add(char)
+
+        npc = NPC(
+            session_id=gs.id,
+            name="Griselda",
+            disposition="friendly",
+            location_id=loc.id,
+        )
+        session.add(npc)
+
+        quest = Quest(
+            session_id=gs.id,
+            title="Recovery of Cursed Relics",
+            status="active",
+        )
+        session.add(quest)
+        await session.flush()
+
+        return gs
+
+    @pytest.mark.asyncio
+    async def test_contains_world_name(self, session, game_data):
+        text = await _build_layer3_state(session, game_data)
+        assert "Stonebane" in text
+
+    @pytest.mark.asyncio
+    async def test_contains_location(self, session, game_data):
+        text = await _build_layer3_state(session, game_data)
+        assert "The Great Hall" in text
+        assert "dungeon" in text
+
+    @pytest.mark.asyncio
+    async def test_contains_character_stats(self, session, game_data):
+        text = await _build_layer3_state(session, game_data)
+        assert "Thorin Ironforge" in text
+        assert "L1 Fighter" in text
+        assert "HP:10/10" in text
+        assert "AC:16" in text
+
+    @pytest.mark.asyncio
+    async def test_contains_npc(self, session, game_data):
+        text = await _build_layer3_state(session, game_data)
+        assert "Griselda" in text
+        assert "friendly" in text
+
+    @pytest.mark.asyncio
+    async def test_contains_quest(self, session, game_data):
+        text = await _build_layer3_state(session, game_data)
+        assert "Recovery of Cursed Relics" in text
+
+    @pytest.mark.asyncio
+    async def test_no_location_shows_unknown(self, session):
+        gs = GameSession(
+            conversation_id="test-conv-2",
+            world_name="Voidheim",
+        )
+        session.add(gs)
+        await session.flush()
+        text = await _build_layer3_state(session, gs)
+        assert "unknown" in text
+        assert "Voidheim" in text
+
+    @pytest.mark.asyncio
+    async def test_empty_party(self, session):
+        gs = GameSession(
+            conversation_id="test-conv-3",
+            world_name="Emptyland",
+        )
+        session.add(gs)
+        await session.flush()
+        text = await _build_layer3_state(session, gs)
+        assert "Party: (none)" in text
+
+    @pytest.mark.asyncio
+    async def test_combat_state_shown(self, session):
+        gs = GameSession(
+            conversation_id="test-conv-4",
+            world_name="Battleground",
+            combat_state='{"turn": 1}',
+        )
+        session.add(gs)
+        await session.flush()
+        text = await _build_layer3_state(session, gs)
+        assert "Combat: active" in text
+
+    @pytest.mark.asyncio
+    async def test_exits_resolved(self, session):
+        gs = GameSession(
+            conversation_id="test-conv-5",
+            world_name="Crossroads",
+        )
+        session.add(gs)
+        await session.flush()
+
+        loc_a = Location(session_id=gs.id, name="Town Square", biome="town", exits="{}")
+        session.add(loc_a)
+        await session.flush()
+
+        loc_b = Location(session_id=gs.id, name="Dark Forest", biome="forest", exits="{}")
+        session.add(loc_b)
+        await session.flush()
+
+        loc_a.exits = json.dumps({"north": loc_b.id})
+        gs.current_location_id = loc_a.id
+        await session.flush()
+
+        text = await _build_layer3_state(session, gs)
+        assert "north->Dark Forest" in text
+
+
+# --- build_rpg_system_prompt (integration) ---
+
+
+class TestBuildRpgSystemPrompt:
+    @pytest.fixture
+    async def game_session(self, session):
+        gs = GameSession(
+            conversation_id="test-conv-integ",
+            world_name="Mythrealm",
+            environment='{"time_of_day":"night","weather":"rain","season":"autumn"}',
+        )
+        session.add(gs)
+        await session.flush()
+
+        loc = Location(session_id=gs.id, name="Rainy Tavern", biome="town", exits="{}")
+        session.add(loc)
+        await session.flush()
+
+        gs.current_location_id = loc.id
+
+        char = Character(
+            session_id=gs.id,
+            name="Madrigal",
+            char_class="Paladin",
+            level=10,
+            max_hp=94,
+            current_hp=94,
+            armor_class=11,
+        )
+        session.add(char)
+        await session.flush()
+        return gs
+
+    @pytest.mark.asyncio
+    async def test_all_layers_present(self, session, game_session):
+        prompt = await build_rpg_system_prompt(session, "test-conv-integ", set())
+        # Layer 1
+        assert "Dungeon Master" in prompt
+        # Layer 2 (exploration by default)
+        assert "EXPLORATION" in prompt
+        # Layer 3
+        assert "Mythrealm" in prompt
+        assert "Madrigal" in prompt
+        assert "Rainy Tavern" in prompt
+        # Layer 4
+        assert "2nd person" in prompt
+
+    @pytest.mark.asyncio
+    async def test_combat_phase_rules(self, session, game_session):
+        game_session.combat_state = '{"turn": 1}'
+        await session.flush()
+        prompt = await build_rpg_system_prompt(session, "test-conv-integ", set())
+        assert "COMBAT" in prompt
+        assert "EXPLORATION" not in prompt
+
+    @pytest.mark.asyncio
+    async def test_social_phase_rules(self, session, game_session):
+        prompt = await build_rpg_system_prompt(
+            session, "test-conv-integ", {"talk_to_npc"},
+        )
+        assert "SOCIAL" in prompt
+
+    @pytest.mark.asyncio
+    async def test_fallback_on_error(self, session):
+        # Pass a conversation_id that will cause get_or_create_session to work
+        # but monkeypatch to force an error
+        import app.services.prompt_builder as pb
+
+        original = pb.get_or_create_session
+
+        async def _explode(*args, **kwargs):
+            raise RuntimeError("DB exploded")
+
+        pb.get_or_create_session = _explode
+        try:
+            prompt = await build_rpg_system_prompt(session, "bad-conv", set())
+            assert prompt == _STATIC_FALLBACK
+        finally:
+            pb.get_or_create_session = original

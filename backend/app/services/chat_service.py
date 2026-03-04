@@ -23,6 +23,11 @@ from app.services.token_utils import (
     estimate_tool_definitions_tokens,
     truncate_history,
 )
+from app.services.prompt_builder import (
+    RPG_TOOL_NAMES,
+    build_rpg_system_prompt,
+    extract_recent_tool_names,
+)
 from app.services.tool_service import ToolService
 
 logger = logging.getLogger(__name__)
@@ -35,29 +40,6 @@ RAG_SYSTEM_TEMPLATE = (
 
 MAX_TOOL_ROUNDS = 10
 TOKEN_CHUNK_SIZE = 4  # chars per fake "token" when chunking non-streamed response
-
-RPG_SYSTEM_PROMPT = (
-    "You are a Dungeon Master running a D&D 5e game. You have access to RPG tools that enforce game rules. "
-    "IMPORTANT RULES:\n"
-    "- Always use the tools to modify game state. Never just narrate mechanical changes.\n"
-    "- Use create_character before referencing a character in other tools.\n"
-    "- Use roll_check / roll_save for ability checks and saves — don't invent results.\n"
-    "- Use the attack tool for combat attacks — don't narrate hit/miss without rolling.\n"
-    "- Track HP, conditions, and spell slots through the tools.\n"
-    "- Narrate results dramatically after receiving tool output.\n"
-    "- When starting a new game, use init_game_session first.\n"
-    "- When creating characters, give them evocative fantasy names. Never use generic names like 'Adventurer'.\n"
-    "- When starting a game, give the world a distinctive fantasy name.\n"
-)
-
-# Tool names that indicate RPG tools are active
-_RPG_TOOL_NAMES = {
-    "create_character", "get_character", "update_character", "list_characters",
-    "start_combat", "attack", "cast_spell", "heal", "take_damage", "death_save",
-    "create_location", "move_to", "look_around", "create_npc", "talk_to_npc",
-    "create_quest", "complete_quest", "init_game_session", "get_game_state",
-    "roll_dice", "roll_check", "roll_save",
-}
 
 
 class ChatService:
@@ -123,12 +105,16 @@ class ChatService:
         # Load conversation tools
         conv_tools = await self._load_conversation_tools(session, conversation_id)
 
-        # Inject RPG DM system prompt if RPG tools are enabled
+        # Inject dynamic RPG DM system prompt if RPG tools are enabled
         if conv_tools:
             tool_names = {t.name for t in conv_tools}
-            if tool_names & _RPG_TOOL_NAMES:
-                messages.insert(0, {"role": "system", "content": RPG_SYSTEM_PROMPT})
-                budget.system_prompt_tokens = estimate_tokens(RPG_SYSTEM_PROMPT)
+            if tool_names & RPG_TOOL_NAMES:
+                recent_tools = extract_recent_tool_names(messages)
+                dynamic_prompt = await build_rpg_system_prompt(
+                    session, conversation_id, recent_tools,
+                )
+                messages.insert(0, {"role": "system", "content": dynamic_prompt})
+                budget.system_prompt_tokens = estimate_tokens(dynamic_prompt)
 
         kwargs = {}
         if options:

@@ -13,6 +13,13 @@ from app.services.builtin_tools import BUILTIN_REGISTRY
 
 logger = logging.getLogger(__name__)
 
+# LLMs frequently send wrong parameter names (e.g. "class" instead of
+# "char_class" because "class" is a Python reserved word).  Map them here
+# so tool calls don't fail with unexpected-keyword errors.
+_ARGUMENT_ALIASES: dict[str, dict[str, str]] = {
+    "create_character": {"class": "char_class"},
+}
+
 
 class ToolService:
     async def execute_tool(
@@ -72,12 +79,35 @@ class ToolService:
         if func is None:
             return f"[Unknown builtin function: {func_name}]"
 
+        # Remap known argument aliases (e.g. "class" -> "char_class")
+        aliases = _ARGUMENT_ALIASES.get(func_name)
+        if aliases:
+            for bad_name, good_name in aliases.items():
+                if bad_name in arguments and good_name not in arguments:
+                    arguments[good_name] = arguments.pop(bad_name)
+
         # Inject session/conversation_id for functions that accept them
         sig = inspect.signature(func)
         if "session" in sig.parameters and session is not None:
             arguments = {**arguments, "session": session}
         if "conversation_id" in sig.parameters and conversation_id is not None:
             arguments = {**arguments, "conversation_id": conversation_id}
+
+        # Strip unknown arguments the LLM may hallucinate (e.g. "age",
+        # "traits", "profession" for create_npc).  Only keep params that
+        # the function actually accepts, unless it has **kwargs.
+        has_var_keyword = any(
+            p.kind == inspect.Parameter.VAR_KEYWORD
+            for p in sig.parameters.values()
+        )
+        if not has_var_keyword:
+            valid_params = set(sig.parameters)
+            unknown = set(arguments) - valid_params
+            if unknown:
+                logger.warning(
+                    "Stripping unknown args from %s: %s", func_name, unknown,
+                )
+                arguments = {k: v for k, v in arguments.items() if k in valid_params}
 
         result = func(**arguments)
         if asyncio.iscoroutine(result):
