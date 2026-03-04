@@ -3,12 +3,17 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 
 import pytest
 
 from app.models.rpg import Character, GameSession, Location, NPC, Quest
 from app.services.prompt_builder import (
     GamePhase,
+    PromptResult,
+    RPG_TOOL_NAMES,
+    _CORE_TOOLS,
+    _PHASE_TOOLS,
     _STATIC_FALLBACK,
     _build_layer1_identity,
     _build_layer2_jit_rules,
@@ -17,6 +22,8 @@ from app.services.prompt_builder import (
     build_rpg_system_prompt,
     detect_phase,
     extract_recent_tool_names,
+    filter_tools_by_phase,
+    get_phase_tool_names,
 )
 
 
@@ -261,7 +268,7 @@ class TestBuildLayer3State:
         assert "north->Dark Forest" in text
 
 
-# --- build_rpg_system_prompt (integration) ---
+# --- build_rpg_system_prompt (integration, returns PromptResult) ---
 
 
 class TestBuildRpgSystemPrompt:
@@ -296,7 +303,8 @@ class TestBuildRpgSystemPrompt:
 
     @pytest.mark.asyncio
     async def test_all_layers_present(self, session, game_session):
-        prompt = await build_rpg_system_prompt(session, "test-conv-integ", set())
+        result = await build_rpg_system_prompt(session, "test-conv-integ", set())
+        prompt = result.prompt
         # Layer 1
         assert "Dungeon Master" in prompt
         # Layer 2 (exploration by default)
@@ -312,21 +320,19 @@ class TestBuildRpgSystemPrompt:
     async def test_combat_phase_rules(self, session, game_session):
         game_session.combat_state = '{"turn": 1}'
         await session.flush()
-        prompt = await build_rpg_system_prompt(session, "test-conv-integ", set())
-        assert "COMBAT" in prompt
-        assert "EXPLORATION" not in prompt
+        result = await build_rpg_system_prompt(session, "test-conv-integ", set())
+        assert "COMBAT" in result.prompt
+        assert "EXPLORATION" not in result.prompt
 
     @pytest.mark.asyncio
     async def test_social_phase_rules(self, session, game_session):
-        prompt = await build_rpg_system_prompt(
+        result = await build_rpg_system_prompt(
             session, "test-conv-integ", {"talk_to_npc"},
         )
-        assert "SOCIAL" in prompt
+        assert "SOCIAL" in result.prompt
 
     @pytest.mark.asyncio
     async def test_fallback_on_error(self, session):
-        # Pass a conversation_id that will cause get_or_create_session to work
-        # but monkeypatch to force an error
         import app.services.prompt_builder as pb
 
         original = pb.get_or_create_session
@@ -336,7 +342,141 @@ class TestBuildRpgSystemPrompt:
 
         pb.get_or_create_session = _explode
         try:
-            prompt = await build_rpg_system_prompt(session, "bad-conv", set())
-            assert prompt == _STATIC_FALLBACK
+            result = await build_rpg_system_prompt(session, "bad-conv", set())
+            assert result.prompt == _STATIC_FALLBACK
+            assert result.phase is GamePhase.EXPLORATION
         finally:
             pb.get_or_create_session = original
+
+
+# --- PromptResult type (DB-backed) ---
+
+
+class TestPromptResultType:
+    @pytest.fixture
+    async def game_session(self, session):
+        gs = GameSession(
+            conversation_id="test-conv-pr",
+            world_name="Testworld",
+        )
+        session.add(gs)
+        await session.flush()
+        return gs
+
+    @pytest.mark.asyncio
+    async def test_returns_prompt_result(self, session, game_session):
+        result = await build_rpg_system_prompt(session, "test-conv-pr", set())
+        assert isinstance(result, PromptResult)
+        assert isinstance(result.prompt, str)
+        assert isinstance(result.phase, GamePhase)
+
+    @pytest.mark.asyncio
+    async def test_exploration_phase_by_default(self, session, game_session):
+        result = await build_rpg_system_prompt(session, "test-conv-pr", set())
+        assert result.phase is GamePhase.EXPLORATION
+
+    @pytest.mark.asyncio
+    async def test_combat_phase_returned(self, session, game_session):
+        game_session.combat_state = '{"turn": 1}'
+        await session.flush()
+        result = await build_rpg_system_prompt(session, "test-conv-pr", set())
+        assert result.phase is GamePhase.COMBAT
+
+    @pytest.mark.asyncio
+    async def test_fallback_returns_exploration(self, session):
+        import app.services.prompt_builder as pb
+
+        original = pb.get_or_create_session
+
+        async def _explode(*args, **kwargs):
+            raise RuntimeError("forced")
+
+        pb.get_or_create_session = _explode
+        try:
+            result = await build_rpg_system_prompt(session, "bad", set())
+            assert result.prompt == _STATIC_FALLBACK
+            assert result.phase is GamePhase.EXPLORATION
+        finally:
+            pb.get_or_create_session = original
+
+
+# --- Tool filtering (Phase 1.4, pure unit tests) ---
+
+
+def _make_tool(name: str) -> SimpleNamespace:
+    """Create a minimal mock tool with a .name attribute."""
+    return SimpleNamespace(name=name)
+
+
+class TestToolFiltering:
+    def test_core_tools_always_included(self):
+        for phase in GamePhase:
+            allowed = get_phase_tool_names(phase)
+            assert _CORE_TOOLS <= allowed, f"CORE tools missing in {phase}"
+
+    def test_combat_includes_combat_tools(self):
+        allowed = get_phase_tool_names(GamePhase.COMBAT)
+        assert "attack" in allowed
+        assert "start_combat" in allowed
+        assert "death_save" in allowed
+
+    def test_combat_excludes_world_building(self):
+        allowed = get_phase_tool_names(GamePhase.COMBAT)
+        assert "create_location" not in allowed
+        assert "connect_locations" not in allowed
+
+    def test_social_excludes_combat(self):
+        allowed = get_phase_tool_names(GamePhase.SOCIAL)
+        assert "attack" not in allowed
+        assert "cast_spell" not in allowed
+
+    def test_social_includes_npc_tools(self):
+        allowed = get_phase_tool_names(GamePhase.SOCIAL)
+        assert "talk_to_npc" in allowed
+        assert "npc_remember" in allowed
+
+    def test_exploration_includes_world_and_combat_start(self):
+        allowed = get_phase_tool_names(GamePhase.EXPLORATION)
+        assert "move_to" in allowed
+        assert "start_combat" in allowed
+
+    def test_exploration_excludes_combat_actions(self):
+        allowed = get_phase_tool_names(GamePhase.EXPLORATION)
+        assert "attack" not in allowed
+        assert "cast_spell" not in allowed
+
+    def test_filter_reduces_tool_list(self):
+        tools = [_make_tool(n) for n in ("roll_dice", "attack", "move_to", "create_location")]
+        filtered = filter_tools_by_phase(tools, GamePhase.SOCIAL)
+        names = {t.name for t in filtered}
+        # roll_dice is CORE, move_to is SOCIAL — both kept
+        assert "roll_dice" in names
+        assert "move_to" in names
+        # attack and create_location are NOT in SOCIAL
+        assert "attack" not in names
+        assert "create_location" not in names
+
+    def test_custom_tools_never_filtered(self):
+        tools = [
+            _make_tool("roll_dice"),       # RPG tool — subject to filtering
+            _make_tool("my_custom_tool"),   # Non-RPG — always kept
+        ]
+        for phase in GamePhase:
+            filtered = filter_tools_by_phase(tools, phase)
+            names = {t.name for t in filtered}
+            assert "my_custom_tool" in names, f"Custom tool filtered out in {phase}"
+
+    def test_all_41_tools_covered(self):
+        """Every tool in the builtin registry should be in CORE or at least one phase."""
+        from app.services.builtin_tools import BUILTIN_REGISTRY
+
+        all_phase_tools = _CORE_TOOLS.union(*_PHASE_TOOLS.values())
+        for tool_name in BUILTIN_REGISTRY:
+            assert tool_name in all_phase_tools, (
+                f"Tool '{tool_name}' is not in CORE or any phase"
+            )
+
+    def test_phase_tool_counts(self):
+        assert len(get_phase_tool_names(GamePhase.COMBAT)) == 29
+        assert len(get_phase_tool_names(GamePhase.EXPLORATION)) == 32
+        assert len(get_phase_tool_names(GamePhase.SOCIAL)) == 24

@@ -27,6 +27,7 @@ from app.services.prompt_builder import (
     RPG_TOOL_NAMES,
     build_rpg_system_prompt,
     extract_recent_tool_names,
+    filter_tools_by_phase,
 )
 from app.services.tool_service import ToolService
 
@@ -106,13 +107,16 @@ class ChatService:
         conv_tools = await self._load_conversation_tools(session, conversation_id)
 
         # Inject dynamic RPG DM system prompt if RPG tools are enabled
+        phase = None
         if conv_tools:
             tool_names = {t.name for t in conv_tools}
             if tool_names & RPG_TOOL_NAMES:
                 recent_tools = extract_recent_tool_names(messages)
-                dynamic_prompt = await build_rpg_system_prompt(
+                prompt_result = await build_rpg_system_prompt(
                     session, conversation_id, recent_tools,
                 )
+                dynamic_prompt = prompt_result.prompt
+                phase = prompt_result.phase
                 messages.insert(0, {"role": "system", "content": dynamic_prompt})
                 budget.system_prompt_tokens = estimate_tokens(dynamic_prompt)
 
@@ -122,7 +126,14 @@ class ChatService:
 
         if conv_tools:
             # === Agent loop with tool calling (non-streaming) ===
-            ollama_tools = self.tool_service.build_ollama_tools(conv_tools)
+            # Phase 1.4: Filter tools by game phase
+            if phase is not None and settings.tool_injection_enabled:
+                llm_tools = filter_tools_by_phase(conv_tools, phase)
+                logger.info("Tool injection: phase=%s, %d/%d tools", phase.value, len(llm_tools), len(conv_tools))
+            else:
+                llm_tools = conv_tools
+
+            ollama_tools = self.tool_service.build_ollama_tools(llm_tools)
             budget.tool_definitions_tokens = estimate_tool_definitions_tokens(ollama_tools)
 
             # Phase 1.2: Summarize older history if over threshold

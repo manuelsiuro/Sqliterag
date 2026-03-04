@@ -10,6 +10,7 @@ from __future__ import annotations
 import enum
 import json
 import logging
+from typing import NamedTuple
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,13 +20,27 @@ from app.services.rpg_service import get_or_create_session
 
 logger = logging.getLogger(__name__)
 
-# Tool names that indicate RPG tools are active (moved from chat_service)
+# All builtin RPG tool names — used both for RPG detection and phase filtering
 RPG_TOOL_NAMES = {
+    # Dice & Rolls
+    "roll_d20", "roll_dice", "roll_check", "roll_save",
+    # Characters
     "create_character", "get_character", "update_character", "list_characters",
-    "start_combat", "attack", "cast_spell", "heal", "take_damage", "death_save",
-    "create_location", "move_to", "look_around", "create_npc", "talk_to_npc",
-    "create_quest", "complete_quest", "init_game_session", "get_game_state",
-    "roll_dice", "roll_check", "roll_save",
+    # Combat
+    "start_combat", "get_combat_status", "next_turn", "end_combat",
+    "attack", "cast_spell", "heal", "take_damage", "death_save", "combat_action",
+    # Inventory & Items
+    "create_item", "give_item", "equip_item", "unequip_item", "get_inventory", "transfer_item",
+    # World & Exploration
+    "create_location", "connect_locations", "move_to", "look_around", "set_environment",
+    # NPCs
+    "create_npc", "talk_to_npc", "update_npc_relationship", "npc_remember",
+    # Quests
+    "create_quest", "update_quest_objective", "complete_quest", "get_quest_journal",
+    # Rest & Recovery
+    "short_rest", "long_rest",
+    # Game Session
+    "init_game_session", "get_game_state",
 }
 
 # Static fallback — identical to the old RPG_SYSTEM_PROMPT
@@ -66,6 +81,12 @@ def detect_phase(
     return GamePhase.EXPLORATION
 
 
+class PromptResult(NamedTuple):
+    """Return type for build_rpg_system_prompt — prompt text + detected phase."""
+    prompt: str
+    phase: GamePhase
+
+
 def extract_recent_tool_names(
     messages: list[dict],
     lookback: int = 5,
@@ -80,6 +101,62 @@ def extract_recent_tool_names(
             if count >= lookback:
                 break
     return names
+
+
+# ---------------------------------------------------------------------------
+# Phase → Tool Filtering (Phase 1.4)
+# ---------------------------------------------------------------------------
+
+_CORE_TOOLS: frozenset[str] = frozenset({
+    # Dice
+    "roll_d20", "roll_dice", "roll_check", "roll_save",
+    # Characters
+    "create_character", "get_character", "update_character", "list_characters",
+    # Session
+    "init_game_session", "get_game_state",
+    # Quests
+    "create_quest", "update_quest_objective", "complete_quest", "get_quest_journal",
+})
+
+_PHASE_TOOLS: dict[GamePhase, frozenset[str]] = {
+    GamePhase.COMBAT: frozenset({
+        "start_combat", "get_combat_status", "next_turn", "end_combat",
+        "attack", "cast_spell", "heal", "take_damage", "death_save", "combat_action",
+        "short_rest", "long_rest",
+        "get_inventory", "equip_item", "unequip_item",
+    }),
+    GamePhase.EXPLORATION: frozenset({
+        "create_location", "connect_locations", "move_to", "look_around", "set_environment",
+        "create_npc", "talk_to_npc", "update_npc_relationship", "npc_remember",
+        "create_item", "give_item", "equip_item", "unequip_item", "get_inventory", "transfer_item",
+        "short_rest", "long_rest",
+        "start_combat",
+    }),
+    GamePhase.SOCIAL: frozenset({
+        "create_npc", "talk_to_npc", "update_npc_relationship", "npc_remember",
+        "look_around", "move_to",
+        "get_inventory", "give_item", "transfer_item",
+        "start_combat",
+    }),
+}
+
+
+def get_phase_tool_names(phase: GamePhase) -> frozenset[str]:
+    """Return all tool names allowed for a given game phase."""
+    return _CORE_TOOLS | _PHASE_TOOLS[phase]
+
+
+def filter_tools_by_phase(tools: list, phase: GamePhase) -> list:
+    """Filter a tool list by game phase.
+
+    Non-RPG tools (custom/HTTP) are always kept — only tools whose names
+    appear in RPG_TOOL_NAMES are subject to phase filtering.
+    """
+    allowed = get_phase_tool_names(phase)
+    return [
+        t for t in tools
+        if t.name not in RPG_TOOL_NAMES or t.name in allowed
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -277,10 +354,11 @@ async def build_rpg_system_prompt(
     session: AsyncSession,
     conversation_id: str,
     recent_tool_names: set[str],
-) -> str:
+) -> PromptResult:
     """Build a dynamic 4-layer RPG system prompt.
 
-    On any exception, falls back to the static prompt.
+    Returns a PromptResult with the prompt text and detected game phase.
+    On any exception, falls back to the static prompt with EXPLORATION phase.
     """
     try:
         game_session = await get_or_create_session(session, conversation_id)
@@ -292,7 +370,7 @@ async def build_rpg_system_prompt(
         layer3 = await _build_layer3_state(session, game_session)
         layer4 = _build_layer4_format()
 
-        return f"{layer1}\n{layer2}\n{layer3}\n{layer4}"
+        return PromptResult(f"{layer1}\n{layer2}\n{layer3}\n{layer4}", phase)
     except Exception:
         logger.warning("Dynamic prompt build failed, using static fallback", exc_info=True)
-        return _STATIC_FALLBACK
+        return PromptResult(_STATIC_FALLBACK, GamePhase.EXPLORATION)

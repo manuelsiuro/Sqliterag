@@ -40,6 +40,9 @@ class Settings(BaseSettings):
     history_preserve_recent: int = 10
     history_summary_max_tokens: int = 200
 
+    # Dynamic tool injection (Phase 1.4)
+    tool_injection_enabled: bool = True
+
     # Server
     host: str = "0.0.0.0"
     port: int = 8000
