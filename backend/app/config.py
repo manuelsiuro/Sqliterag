@@ -34,6 +34,12 @@ class Settings(BaseSettings):
     # Context window
     default_num_ctx: int = 8192
 
+    # Conversation history summarization (Phase 1.2)
+    history_summary_enabled: bool = True
+    history_summarization_threshold: float = 0.7
+    history_preserve_recent: int = 10
+    history_summary_max_tokens: int = 200
+
     # Server
     host: str = "0.0.0.0"
     port: int = 8000

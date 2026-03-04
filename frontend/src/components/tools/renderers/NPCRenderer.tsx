@@ -12,16 +12,24 @@ interface NPCData {
   total_memories?: number;
   roleplay_hint?: string;
   changes?: string[];
+  is_party_member?: boolean;
   error?: string;
 }
 
 const DISPOSITION_SCALE = ["hostile", "unfriendly", "neutral", "friendly", "helpful"];
 const DISPOSITION_COLORS: Record<string, string> = {
-  hostile: "bg-red-500",
-  unfriendly: "bg-orange-500",
-  neutral: "bg-gray-400",
-  friendly: "bg-emerald-500",
-  helpful: "bg-blue-500",
+  hostile: "from-red-600 to-red-500",
+  unfriendly: "from-orange-600 to-orange-500",
+  neutral: "from-gray-500 to-gray-400",
+  friendly: "from-emerald-600 to-emerald-500",
+  helpful: "from-blue-500 to-blue-400",
+};
+const DISPOSITION_LABEL_COLORS: Record<string, string> = {
+  hostile: "text-red-400",
+  unfriendly: "text-orange-400",
+  neutral: "text-gray-400",
+  friendly: "text-emerald-400",
+  helpful: "text-blue-400",
 };
 
 const FAMILIARITY_ICONS: Record<string, string> = {
@@ -30,6 +38,17 @@ const FAMILIARITY_ICONS: Record<string, string> = {
   friend: "\uD83E\uDD1D",
   close_friend: "\u2764\uFE0F",
 };
+
+const FAMILIARITY_BADGE: Record<string, string> = {
+  stranger: "bg-gray-800/60 text-gray-400 border-gray-700/40",
+  acquaintance: "bg-slate-800/50 text-slate-300 border-slate-600/30",
+  friend: "bg-emerald-900/30 text-emerald-300 border-emerald-700/30",
+  close_friend: "bg-rose-900/30 text-rose-300 border-rose-700/30",
+};
+
+function capitalize(s: string) {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
 
 export function NPCRenderer({ data }: ToolRendererProps) {
   const d = data as unknown as NPCData;
@@ -40,38 +59,53 @@ export function NPCRenderer({ data }: ToolRendererProps) {
 
   const dispIndex = DISPOSITION_SCALE.indexOf(d.disposition);
   const dispPct = ((dispIndex + 1) / DISPOSITION_SCALE.length) * 100;
+  const familiarityLabel = d.familiarity?.replace("_", " ") || "stranger";
 
   return (
-    <div className="mt-2 space-y-2">
+    <div className="mt-2 bg-gray-800/30 rounded-lg px-3 py-2.5 border border-gray-700/30 space-y-2">
       {/* Header */}
-      <div className="flex items-center gap-2">
-        <span className="text-lg">{FAMILIARITY_ICONS[d.familiarity] || "\uD83D\uDC64"}</span>
-        <div>
-          <div className="text-sm font-bold text-purple-200">{d.name}</div>
-          <div className="text-[10px] text-gray-500 capitalize">
-            {d.familiarity.replace("_", " ")}
-            {d.location && <> &middot; {d.location}</>}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-xl">{FAMILIARITY_ICONS[d.familiarity] || "\uD83D\uDC64"}</span>
+          <div>
+            <div className="text-sm font-bold text-purple-200">{d.name}</div>
+            {d.location && (
+              <div className="text-[10px] text-gray-500">{d.location}</div>
+            )}
           </div>
+        </div>
+        <div className="flex items-center gap-1.5">
+          {d.is_party_member && (
+            <span className="text-[11px] px-2 py-0.5 rounded-full bg-blue-900/30 text-blue-300 border border-blue-700/30">
+              Party Member
+            </span>
+          )}
+          <span className={`text-[11px] px-2 py-0.5 rounded-full border ${FAMILIARITY_BADGE[d.familiarity] || FAMILIARITY_BADGE.stranger}`}>
+            {FAMILIARITY_ICONS[d.familiarity] || "\uD83D\uDC64"} {capitalize(familiarityLabel)}
+          </span>
         </div>
       </div>
 
+      {/* Description */}
       {d.description && (
-        <div className="text-xs text-gray-400 italic">{d.description}</div>
+        <div className="text-xs text-gray-400 bg-gray-800/40 rounded px-2 py-1.5 border border-gray-700/30 italic">
+          {d.description}
+        </div>
       )}
 
       {/* Disposition meter */}
       <div>
         <div className="flex justify-between text-[10px] text-gray-500 mb-0.5">
           <span>Hostile</span>
-          <span className="capitalize font-medium text-gray-300">{d.disposition}</span>
+          <span className={`capitalize font-medium ${DISPOSITION_LABEL_COLORS[d.disposition] || "text-gray-300"}`}>
+            {d.disposition}
+          </span>
           <span>Helpful</span>
         </div>
         <div className="w-full h-2.5 bg-gray-800 rounded-full overflow-hidden border border-gray-700 relative">
+          <div className="absolute inset-0 bg-gradient-to-r from-red-500/15 via-gray-400/10 to-blue-500/15" />
           <div
-            className="absolute inset-0 bg-gradient-to-r from-red-500 via-gray-400 to-blue-500 opacity-20"
-          />
-          <div
-            className={`h-full rounded-full transition-all ${DISPOSITION_COLORS[d.disposition] || "bg-gray-400"}`}
+            className={`h-full rounded-full transition-all duration-500 bg-gradient-to-r ${DISPOSITION_COLORS[d.disposition] || "from-gray-500 to-gray-400"}`}
             style={{ width: `${dispPct}%` }}
           />
         </div>
@@ -79,17 +113,24 @@ export function NPCRenderer({ data }: ToolRendererProps) {
 
       {/* Topic */}
       {d.topic && (
-        <div className="text-xs text-gray-400">
-          Topic: <span className="text-gray-300">{d.topic}</span>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] text-gray-500">Topic:</span>
+          <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-900/30 text-amber-300 border border-amber-700/30">
+            {d.topic}
+          </span>
         </div>
       )}
 
       {/* Memory */}
       {d.memory && d.memory.length > 0 && (
-        <div className="space-y-0.5">
-          <div className="text-[10px] text-gray-500">Memories ({d.memory.length}):</div>
+        <div className="space-y-1">
+          <div className="text-[10px] text-gray-500 font-medium">Memories ({d.memory.length})</div>
           {d.memory.slice(-3).map((m, i) => (
-            <div key={i} className="text-xs text-gray-400 pl-2 border-l border-gray-700 animate-item-appear" style={{ animationDelay: `${i * 40}ms` }}>
+            <div
+              key={i}
+              className="text-xs text-gray-400 pl-2 border-l-2 border-purple-700/40 bg-purple-900/10 rounded-r px-2 py-0.5 animate-item-appear"
+              style={{ animationDelay: `${i * 40}ms` }}
+            >
               {m}
             </div>
           ))}
@@ -97,14 +138,18 @@ export function NPCRenderer({ data }: ToolRendererProps) {
       )}
 
       {d.memory_added && (
-        <div className="text-xs text-green-400">Remembered: &ldquo;{d.memory_added}&rdquo;</div>
+        <div className="text-xs text-green-400 bg-green-900/15 rounded px-2 py-1 border border-green-700/20">
+          Remembered: &ldquo;{d.memory_added}&rdquo;
+        </div>
       )}
 
       {/* Changes */}
       {d.changes && d.changes.length > 0 && (
-        <div className="text-xs text-gray-400 border-t border-gray-700/50 pt-1">
+        <div className="space-y-0.5 border-t border-gray-700/30 pt-1.5">
           {d.changes.map((c, i) => (
-            <div key={i}>&bull; {c}</div>
+            <div key={i} className="text-xs text-amber-300/80 flex items-center gap-1.5 animate-item-appear" style={{ animationDelay: `${i * 40}ms` }}>
+              <span className="text-amber-500">&#x25B8;</span> {c}
+            </div>
           ))}
         </div>
       )}

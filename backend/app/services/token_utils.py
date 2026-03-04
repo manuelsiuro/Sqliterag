@@ -5,6 +5,10 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.services.base import BaseLLMService
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +75,10 @@ class TokenBudget:
     truncated_message_count: int = 0
     history_budget: int = 0
 
+    # Populated by apply_history_summarization()
+    summarized_message_count: int = 0
+    summary_tokens: int = 0
+
     @property
     def input_budget(self) -> int:
         """Maximum tokens available for input (context window minus reserves)."""
@@ -106,8 +114,10 @@ class TokenBudget:
         """
         pct = self.utilization_pct
         trunc_suffix = ""
+        if self.summarized_message_count > 0:
+            trunc_suffix += f" | summarized={self.summarized_message_count} msgs"
         if self.truncated_message_count > 0:
-            trunc_suffix = f" | truncated={self.truncated_message_count} msgs"
+            trunc_suffix += f" | truncated={self.truncated_message_count} msgs"
         logger.info(
             "Token budget: system=%d rag=%d tools=%d history=%d "
             "| total_input=%d / %d (%.1f%%) | remaining=%d%s",
@@ -287,5 +297,192 @@ def truncate_history(
             dropped_count,
             history_budget,
         )
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Conversation history summarization (Phase 1.2)
+# ---------------------------------------------------------------------------
+
+SUMMARY_PREFIX = "[Summary of earlier conversation]"
+
+
+def _format_messages_for_summary(messages: list[dict]) -> str:
+    """Format a list of messages into a text block for summarization."""
+    lines: list[str] = []
+    for msg in messages:
+        role = msg.get("role", "unknown")
+        content = msg.get("content", "") or ""
+        if role == "tool":
+            tool_name = msg.get("tool_name", "tool")
+            # Abbreviate tool results to keep the summarization prompt manageable
+            abbreviated = content[:200] + "..." if len(content) > 200 else content
+            lines.append(f"[{tool_name} result] {abbreviated}")
+        elif role == "assistant" and msg.get("tool_calls"):
+            names = [
+                tc.get("function", {}).get("name", "?")
+                for tc in msg["tool_calls"]
+            ]
+            if content:
+                lines.append(f"ASSISTANT: {content} (called tools: {', '.join(names)})")
+            else:
+                lines.append(f"ASSISTANT called tools: {', '.join(names)}")
+        else:
+            lines.append(f"{role.upper()}: {content}")
+    return "\n".join(lines)
+
+
+async def generate_summary(
+    llm_service: BaseLLMService,
+    model: str,
+    messages_to_summarize: list[dict],
+    previous_summary: str | None = None,
+    max_tokens: int = 200,
+) -> str:
+    """Generate a summary of older conversation messages via LLM call.
+
+    Args:
+        llm_service: LLM service for inference.
+        model: Model name (e.g. ``"llama3.2"``).
+        messages_to_summarize: Messages to compress into a summary.
+        previous_summary: If provided, the new summary incorporates it (recursive).
+        max_tokens: Target maximum tokens for the summary.
+
+    Returns:
+        Summary text string.
+    """
+    context_text = _format_messages_for_summary(messages_to_summarize)
+
+    if previous_summary:
+        prompt = (
+            "You are summarizing a D&D game session conversation. "
+            "Merge the previous summary with the new conversation excerpt into one updated summary.\n\n"
+            f"Previous summary:\n{previous_summary}\n\n"
+            f"New conversation:\n{context_text}\n\n"
+            "Write a concise summary focusing on: character actions and decisions, "
+            "story progression, combat outcomes, NPCs encountered, and resource changes. "
+            f"Keep it under {max_tokens * 4} characters."
+        )
+    else:
+        prompt = (
+            "You are summarizing a D&D game session conversation.\n\n"
+            f"Conversation:\n{context_text}\n\n"
+            "Write a concise summary focusing on: character actions and decisions, "
+            "story progression, combat outcomes, NPCs encountered, and resource changes. "
+            f"Keep it under {max_tokens * 4} characters."
+        )
+
+    response = await llm_service.chat(
+        model,
+        [{"role": "user", "content": prompt}],
+        options={"num_predict": max_tokens + 100},
+    )
+    return (response.get("content") or "").strip()
+
+
+async def apply_history_summarization(
+    messages: list[dict],
+    budget: TokenBudget,
+    llm_service: BaseLLMService,
+    model: str,
+    *,
+    preserve_recent: int = 10,
+    threshold: float = 0.7,
+    max_summary_tokens: int = 200,
+) -> list[dict]:
+    """Apply sliding-window summarization to conversation history.
+
+    When conversation history tokens exceed *threshold* of the available
+    history budget, older messages are summarized into a single synthetic
+    system message while the most recent *preserve_recent* message groups
+    are kept in full.
+
+    Returns a new message list (never mutates the input).  Updates
+    *budget.summarized_message_count* and *budget.summary_tokens* in place.
+    """
+    # Separate system messages from conversation messages
+    system_msgs: list[dict] = []
+    conv_msgs: list[dict] = []
+    existing_summary: str | None = None
+
+    for m in messages:
+        if m.get("role") == "system":
+            content = m.get("content") or ""
+            if content.startswith(SUMMARY_PREFIX):
+                # Extract previous summary for recursive merge
+                existing_summary = content[len(SUMMARY_PREFIX):].strip()
+            else:
+                system_msgs.append(m)
+        else:
+            conv_msgs.append(m)
+
+    # Compute history budget (same formula as truncate_history)
+    fixed_cost = (
+        budget.system_prompt_tokens
+        + budget.rag_context_tokens
+        + budget.tool_definitions_tokens
+    )
+    history_budget = budget.input_budget - fixed_cost
+    if history_budget <= 0:
+        return messages
+
+    # Check if summarization is needed
+    conv_tokens = sum(estimate_message_tokens(m) for m in conv_msgs)
+    if conv_tokens <= history_budget * threshold:
+        return messages
+
+    # Build message groups (atomic tool-call + results)
+    groups = _build_message_groups(conv_msgs)
+    if len(groups) <= preserve_recent:
+        return messages  # Not enough groups to summarize
+
+    # Split into old (to summarize) and recent (to preserve)
+    old_groups = groups[:-preserve_recent]
+    recent_groups = groups[-preserve_recent:]
+    old_messages = [msg for group in old_groups for msg in group]
+    recent_messages = [msg for group in recent_groups for msg in group]
+
+    # Generate summary via LLM
+    try:
+        summary_text = await generate_summary(
+            llm_service,
+            model,
+            old_messages,
+            previous_summary=existing_summary,
+            max_tokens=max_summary_tokens,
+        )
+    except Exception as exc:
+        logger.warning("Summarization failed, falling back to truncation: %s", exc)
+        return messages
+
+    if not summary_text:
+        logger.warning("Summarization returned empty text, falling back to truncation")
+        return messages
+
+    # Build synthetic summary message
+    summary_msg: dict = {
+        "role": "system",
+        "content": f"{SUMMARY_PREFIX}\n{summary_text}",
+    }
+
+    # Assemble result
+    result = system_msgs + [summary_msg] + recent_messages
+
+    # Update budget tracking
+    budget.summarized_message_count = len(old_messages)
+    budget.summary_tokens = estimate_message_tokens(summary_msg)
+    budget.conversation_history_tokens = (
+        budget.summary_tokens
+        + sum(estimate_message_tokens(m) for m in recent_messages)
+    )
+
+    logger.info(
+        "History summarized: %d old messages → %d summary tokens, "
+        "%d recent messages preserved",
+        len(old_messages),
+        budget.summary_tokens,
+        len(recent_messages),
+    )
 
     return result

@@ -17,6 +17,7 @@ from app.services.base import BaseLLMService
 from app.services.rag_service import RAGService
 from app.services.token_utils import (
     TokenBudget,
+    apply_history_summarization,
     estimate_message_tokens,
     estimate_tokens,
     estimate_tool_definitions_tokens,
@@ -137,6 +138,19 @@ class ChatService:
             # === Agent loop with tool calling (non-streaming) ===
             ollama_tools = self.tool_service.build_ollama_tools(conv_tools)
             budget.tool_definitions_tokens = estimate_tool_definitions_tokens(ollama_tools)
+
+            # Phase 1.2: Summarize older history if over threshold
+            if settings.history_summary_enabled:
+                messages = await apply_history_summarization(
+                    messages,
+                    budget,
+                    self.llm_service,
+                    model,
+                    preserve_recent=settings.history_preserve_recent,
+                    threshold=settings.history_summarization_threshold,
+                    max_summary_tokens=settings.history_summary_max_tokens,
+                )
+
             messages = truncate_history(messages, budget)
             budget.log_summary()
             tool_map = {t.name: t for t in conv_tools}

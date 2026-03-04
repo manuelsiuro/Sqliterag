@@ -2,16 +2,21 @@
 
 import json
 import logging
+from unittest.mock import AsyncMock
 
 import pytest
 
 from app.services.token_utils import (
     MESSAGE_OVERHEAD,
+    SUMMARY_PREFIX,
     TokenBudget,
     _build_message_groups,
+    _format_messages_for_summary,
+    apply_history_summarization,
     estimate_message_tokens,
     estimate_tokens,
     estimate_tool_definitions_tokens,
+    generate_summary,
     truncate_history,
 )
 
@@ -325,3 +330,289 @@ class TestTruncateHistory:
         expected_hb = budget.input_budget - 350
         assert budget.history_budget == expected_hb
         assert budget.conversation_history_tokens > 0
+
+
+# --- _format_messages_for_summary ---
+
+
+class TestFormatMessagesForSummary:
+    def test_simple_messages(self):
+        msgs = [
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi there"},
+        ]
+        result = _format_messages_for_summary(msgs)
+        assert "USER: Hello" in result
+        assert "ASSISTANT: Hi there" in result
+
+    def test_tool_result_abbreviated(self):
+        long_content = "x" * 300
+        msgs = [{"role": "tool", "content": long_content, "tool_name": "roll_dice"}]
+        result = _format_messages_for_summary(msgs)
+        assert "[roll_dice result]" in result
+        assert "..." in result
+        # Should be abbreviated, not full 300 chars
+        assert len(result) < 300
+
+    def test_assistant_with_tool_calls(self):
+        msgs = [
+            {
+                "role": "assistant",
+                "content": "Let me roll",
+                "tool_calls": [{"function": {"name": "roll_dice"}}],
+            }
+        ]
+        result = _format_messages_for_summary(msgs)
+        assert "Let me roll" in result
+        assert "roll_dice" in result
+
+    def test_assistant_tool_calls_no_content(self):
+        msgs = [
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [{"function": {"name": "attack"}}],
+            }
+        ]
+        result = _format_messages_for_summary(msgs)
+        assert "ASSISTANT called tools: attack" in result
+
+
+# --- generate_summary ---
+
+
+class TestGenerateSummary:
+    @pytest.fixture
+    def mock_llm(self):
+        llm = AsyncMock()
+        llm.chat = AsyncMock(return_value={"content": "The party explored the dungeon."})
+        return llm
+
+    @pytest.mark.asyncio
+    async def test_basic_summary(self, mock_llm):
+        msgs = [
+            {"role": "user", "content": "I enter the dungeon"},
+            {"role": "assistant", "content": "You see a dark corridor"},
+        ]
+        result = await generate_summary(mock_llm, "llama3.2", msgs)
+        assert result == "The party explored the dungeon."
+        mock_llm.chat.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_prompt_includes_messages(self, mock_llm):
+        msgs = [{"role": "user", "content": "I attack the goblin"}]
+        await generate_summary(mock_llm, "llama3.2", msgs)
+        call_args = mock_llm.chat.call_args
+        prompt = call_args[0][1][0]["content"]
+        assert "I attack the goblin" in prompt
+
+    @pytest.mark.asyncio
+    async def test_recursive_summary(self, mock_llm):
+        msgs = [{"role": "user", "content": "I rest at the inn"}]
+        await generate_summary(
+            mock_llm, "llama3.2", msgs,
+            previous_summary="The party defeated a dragon.",
+        )
+        call_args = mock_llm.chat.call_args
+        prompt = call_args[0][1][0]["content"]
+        assert "The party defeated a dragon." in prompt
+        assert "Previous summary" in prompt
+
+    @pytest.mark.asyncio
+    async def test_empty_response_returns_empty(self, mock_llm):
+        mock_llm.chat = AsyncMock(return_value={"content": ""})
+        result = await generate_summary(mock_llm, "llama3.2", [])
+        assert result == ""
+
+
+# --- apply_history_summarization ---
+
+
+class TestApplyHistorySummarization:
+    def _make_msg(self, role, content, **extra):
+        msg = {"role": role, "content": content}
+        msg.update(extra)
+        return msg
+
+    def _budget(self, **overrides):
+        defaults = dict(num_ctx=8192, response_reserve=2000, safety_buffer=300)
+        defaults.update(overrides)
+        return TokenBudget(**defaults)
+
+    @pytest.fixture
+    def mock_llm(self):
+        llm = AsyncMock()
+        llm.chat = AsyncMock(return_value={"content": "Summary of events so far."})
+        return llm
+
+    @pytest.mark.asyncio
+    async def test_no_summarization_under_threshold(self, mock_llm):
+        """Short history stays unchanged."""
+        msgs = [
+            self._make_msg("user", "hi"),
+            self._make_msg("assistant", "hello"),
+        ]
+        budget = self._budget()
+        budget.conversation_history_tokens = sum(
+            estimate_message_tokens(m) for m in msgs
+        )
+        result = await apply_history_summarization(msgs, budget, mock_llm, "llama3.2")
+        assert result == msgs
+        mock_llm.chat.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_no_summarization_few_groups(self, mock_llm):
+        """Not enough groups to split → unchanged."""
+        msgs = [self._make_msg("user", "x" * 400) for _ in range(5)]
+        budget = self._budget(num_ctx=1000, response_reserve=200, safety_buffer=100)
+        budget.conversation_history_tokens = sum(
+            estimate_message_tokens(m) for m in msgs
+        )
+        result = await apply_history_summarization(
+            msgs, budget, mock_llm, "llama3.2", preserve_recent=10,
+        )
+        assert result == msgs
+
+    @pytest.mark.asyncio
+    async def test_summarization_triggered(self, mock_llm):
+        """When over threshold with enough groups, summary replaces old messages."""
+        # 20 message groups, each ~105 tokens → well over threshold for a small budget
+        msgs = [self._make_msg("user", "x" * 400) for _ in range(20)]
+        budget = self._budget(num_ctx=3000, response_reserve=500, safety_buffer=100)
+        budget.conversation_history_tokens = sum(
+            estimate_message_tokens(m) for m in msgs
+        )
+        result = await apply_history_summarization(
+            msgs, budget, mock_llm, "llama3.2", preserve_recent=5,
+        )
+        # Should have summary + 5 recent messages
+        summary_msgs = [m for m in result if SUMMARY_PREFIX in (m.get("content") or "")]
+        assert len(summary_msgs) == 1
+        assert "Summary of events so far." in summary_msgs[0]["content"]
+        # Recent messages preserved
+        conv_msgs = [m for m in result if m.get("role") != "system"]
+        assert len(conv_msgs) == 5
+        mock_llm.chat.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_system_messages_preserved(self, mock_llm):
+        """System messages at front never removed."""
+        sys_msg = self._make_msg("system", "You are a DM.")
+        msgs = [sys_msg] + [self._make_msg("user", "x" * 400) for _ in range(20)]
+        budget = self._budget(num_ctx=3000, response_reserve=500, safety_buffer=100)
+        budget.system_prompt_tokens = estimate_message_tokens(sys_msg)
+        budget.conversation_history_tokens = sum(
+            estimate_message_tokens(m) for m in msgs if m.get("role") != "system"
+        )
+        result = await apply_history_summarization(
+            msgs, budget, mock_llm, "llama3.2", preserve_recent=5,
+        )
+        assert result[0] == sys_msg
+
+    @pytest.mark.asyncio
+    async def test_tool_groups_stay_atomic(self, mock_llm):
+        """Tool-call + results in recent window are not split."""
+        old_msgs = [self._make_msg("user", "x" * 400) for _ in range(15)]
+        # Recent: user, assistant+tool, user, assistant
+        recent = [
+            self._make_msg("user", "attack goblin"),
+            self._make_msg("assistant", "", tool_calls=[{"function": {"name": "attack"}}]),
+            self._make_msg("tool", '{"type":"attack_result"}', tool_name="attack"),
+            self._make_msg("user", "nice"),
+            self._make_msg("assistant", "The goblin falls!"),
+        ]
+        msgs = old_msgs + recent
+        budget = self._budget(num_ctx=3000, response_reserve=500, safety_buffer=100)
+        budget.conversation_history_tokens = sum(
+            estimate_message_tokens(m) for m in msgs
+        )
+        result = await apply_history_summarization(
+            msgs, budget, mock_llm, "llama3.2", preserve_recent=4,
+        )
+        # Verify no orphaned tool messages
+        conv_result = [m for m in result if m.get("role") != "system"]
+        for i, m in enumerate(conv_result):
+            if m.get("role") == "tool":
+                prev = conv_result[i - 1]
+                assert (
+                    prev.get("role") == "assistant" and prev.get("tool_calls")
+                ) or prev.get("role") == "tool"
+
+    @pytest.mark.asyncio
+    async def test_budget_fields_updated(self, mock_llm):
+        """summarized_message_count and summary_tokens are set."""
+        msgs = [self._make_msg("user", "x" * 400) for _ in range(20)]
+        budget = self._budget(num_ctx=3000, response_reserve=500, safety_buffer=100)
+        budget.conversation_history_tokens = sum(
+            estimate_message_tokens(m) for m in msgs
+        )
+        await apply_history_summarization(
+            msgs, budget, mock_llm, "llama3.2", preserve_recent=5,
+        )
+        assert budget.summarized_message_count == 15
+        assert budget.summary_tokens > 0
+
+    @pytest.mark.asyncio
+    async def test_llm_failure_returns_original(self, mock_llm):
+        """If LLM call fails, original messages returned."""
+        mock_llm.chat = AsyncMock(side_effect=RuntimeError("Ollama down"))
+        msgs = [self._make_msg("user", "x" * 400) for _ in range(20)]
+        budget = self._budget(num_ctx=3000, response_reserve=500, safety_buffer=100)
+        budget.conversation_history_tokens = sum(
+            estimate_message_tokens(m) for m in msgs
+        )
+        result = await apply_history_summarization(
+            msgs, budget, mock_llm, "llama3.2", preserve_recent=5,
+        )
+        assert result == msgs
+
+    @pytest.mark.asyncio
+    async def test_empty_summary_returns_original(self, mock_llm):
+        """If LLM returns empty summary, original messages returned."""
+        mock_llm.chat = AsyncMock(return_value={"content": ""})
+        msgs = [self._make_msg("user", "x" * 400) for _ in range(20)]
+        budget = self._budget(num_ctx=3000, response_reserve=500, safety_buffer=100)
+        budget.conversation_history_tokens = sum(
+            estimate_message_tokens(m) for m in msgs
+        )
+        result = await apply_history_summarization(
+            msgs, budget, mock_llm, "llama3.2", preserve_recent=5,
+        )
+        assert result == msgs
+
+    @pytest.mark.asyncio
+    async def test_recursive_summary_extracts_previous(self, mock_llm):
+        """Existing summary message is extracted and passed as previous_summary."""
+        existing_summary_msg = self._make_msg(
+            "system", f"{SUMMARY_PREFIX}\nThe party fought wolves."
+        )
+        msgs = (
+            [existing_summary_msg]
+            + [self._make_msg("user", "x" * 400) for _ in range(20)]
+        )
+        budget = self._budget(num_ctx=3000, response_reserve=500, safety_buffer=100)
+        budget.conversation_history_tokens = sum(
+            estimate_message_tokens(m) for m in msgs if m.get("role") != "system"
+        )
+        await apply_history_summarization(
+            msgs, budget, mock_llm, "llama3.2", preserve_recent=5,
+        )
+        # The LLM prompt should include the previous summary
+        call_args = mock_llm.chat.call_args
+        prompt = call_args[0][1][0]["content"]
+        assert "The party fought wolves." in prompt
+
+    @pytest.mark.asyncio
+    async def test_log_summary_includes_summarized(self, mock_llm, caplog):
+        """log_summary() shows summarized count when > 0."""
+        msgs = [self._make_msg("user", "x" * 400) for _ in range(20)]
+        budget = self._budget(num_ctx=3000, response_reserve=500, safety_buffer=100)
+        budget.conversation_history_tokens = sum(
+            estimate_message_tokens(m) for m in msgs
+        )
+        await apply_history_summarization(
+            msgs, budget, mock_llm, "llama3.2", preserve_recent=5,
+        )
+        with caplog.at_level(logging.INFO, logger="app.services.token_utils"):
+            budget.log_summary()
+        assert "summarized=15 msgs" in caplog.text

@@ -12,7 +12,8 @@ from app.services.builtin_tools._common import (
 
 
 async def create_npc(
-    name: str,
+    name: str = "",
+    npc_name: str = "",
     description: str = "",
     location: str = "",
     disposition: str = "neutral",
@@ -22,6 +23,11 @@ async def create_npc(
 ) -> str:
     """Create a new NPC."""
     from app.models.rpg import NPC
+
+    # Accept either 'name' or 'npc_name' for consistency with other NPC tools
+    name = name or npc_name
+    if not name:
+        return json.dumps({"type": "npc_info", "error": "NPC name is required."})
 
     gs = await get_or_create_session(session, conversation_id)
 
@@ -60,7 +66,7 @@ async def talk_to_npc(
     conversation_id: str,
 ) -> str:
     """Get NPC context for roleplay. Returns personality, disposition, memory."""
-    from app.models.rpg import NPC
+    from app.models.rpg import Character, NPC
 
     gs = await get_or_create_session(session, conversation_id)
     result = await session.execute(
@@ -68,6 +74,25 @@ async def talk_to_npc(
     )
     npc = result.scalars().first()
     if not npc:
+        # Fallback: check if name matches a Character (party member)
+        char_result = await session.execute(
+            select(Character).where(
+                Character.session_id == gs.id, Character.name.ilike(npc_name)
+            )
+        )
+        char = char_result.scalars().first()
+        if char:
+            return json.dumps({
+                "type": "npc_info",
+                "name": char.name,
+                "description": f"Level {char.level} {char.race} {char.char_class}",
+                "disposition": "friendly",
+                "familiarity": "friend",
+                "topic": topic,
+                "memory": [],
+                "is_party_member": True,
+                "roleplay_hint": f"Respond as {char.name}, a level {char.level} {char.race} {char.char_class} party member.",
+            })
         return json.dumps({"type": "npc_info", "error": f"NPC '{npc_name}' not found."})
 
     memory = json.loads(npc.memory)
