@@ -18,6 +18,12 @@ logger = logging.getLogger(__name__)
 # so tool calls don't fail with unexpected-keyword errors.
 _ARGUMENT_ALIASES: dict[str, dict[str, str]] = {
     "create_character": {"class": "char_class"},
+    "roll_check": {"name": "character_name", "character": "character_name"},
+    "roll_save": {"name": "character_name", "character": "character_name"},
+    "attack": {"character": "attacker", "name": "attacker"},
+    "talk_to_npc": {"name": "npc_name"},
+    "npc_remember": {"name": "npc_name"},
+    "update_npc_relationship": {"name": "npc_name"},
 }
 
 

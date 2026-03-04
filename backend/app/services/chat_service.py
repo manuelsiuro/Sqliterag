@@ -30,6 +30,7 @@ from app.services.prompt_builder import (
     filter_tools_by_phase,
 )
 from app.services.tool_service import ToolService
+from app.services.tool_validation import validate_tool_call
 
 logger = logging.getLogger(__name__)
 
@@ -215,18 +216,36 @@ class ChatService:
                     # Execute each tool call
                     for tc in tool_calls:
                         func_info = tc.get("function", {})
-                        tool_name = func_info.get("name", "")
-                        arguments = func_info.get("arguments", {})
+                        raw_name = func_info.get("name", "")
+                        raw_arguments = func_info.get("arguments", {})
 
-                        tool = tool_map.get(tool_name)
-                        if tool:
-                            tool_result = await self.tool_service.execute_tool(
-                                tool, arguments,
-                                session=session,
-                                conversation_id=conversation_id,
-                            )
+                        if settings.tool_validation_enabled:
+                            vr = validate_tool_call(raw_name, raw_arguments, tool_map)
+                            if not vr.ok:
+                                tool_name = raw_name
+                                arguments = raw_arguments if isinstance(raw_arguments, dict) else {}
+                                tool_result = f"[Tool call error: {'; '.join(vr.errors)}]"
+                            else:
+                                tool_name = vr.tool_name
+                                arguments = vr.arguments
+                                tool = tool_map[tool_name]
+                                tool_result = await self.tool_service.execute_tool(
+                                    tool, arguments,
+                                    session=session,
+                                    conversation_id=conversation_id,
+                                )
                         else:
-                            tool_result = f"[Unknown tool: {tool_name}]"
+                            tool_name = raw_name
+                            arguments = raw_arguments
+                            tool = tool_map.get(tool_name)
+                            if tool:
+                                tool_result = await self.tool_service.execute_tool(
+                                    tool, arguments,
+                                    session=session,
+                                    conversation_id=conversation_id,
+                                )
+                            else:
+                                tool_result = f"[Unknown tool: {tool_name}]"
 
                         # Save tool result message
                         tool_msg = Message(
