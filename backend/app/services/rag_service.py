@@ -64,7 +64,7 @@ class RAGService:
         await session.flush()
 
         for chunk, chunk_text in chunk_objects:
-            embedding = await self.embedding_service.generate_embedding(chunk_text)
+            embedding = await self.embedding_service.generate_embedding(f"search_document: {chunk_text}")
             vec_bytes = serialize_float32(embedding)
             await session.execute(
                 sql_text("INSERT INTO vec_chunks(rowid, embedding) VALUES (:rowid, :embedding)"),
@@ -82,7 +82,7 @@ class RAGService:
     ) -> list[str]:
         k = top_k or settings.rag_top_k
 
-        embedding = await self.embedding_service.generate_embedding(query)
+        embedding = await self.embedding_service.generate_embedding(f"search_query: {query}")
         vec_bytes = serialize_float32(embedding)
 
         result = await session.execute(
