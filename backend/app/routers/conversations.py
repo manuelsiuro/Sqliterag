@@ -112,6 +112,8 @@ async def get_rpg_state(conversation_id: str, session: AsyncSession = Depends(ge
                 "quantity": inv.quantity,
                 "is_equipped": inv.is_equipped,
                 "rarity": item.rarity,
+                "weight": item.weight,
+                "value_gp": item.value_gp,
             }
             for inv, item in inv_result.all()
         ]
@@ -129,11 +131,27 @@ async def get_rpg_state(conversation_id: str, session: AsyncSession = Depends(ge
     result = await session.execute(
         select(Quest).where(Quest.session_id == gs.id, Quest.status == "active")
     )
-    active_quests = [{"title": q.title, "objectives": json.loads(q.objectives)} for q in result.scalars().all()]
+    active_quests = [
+        {
+            "title": q.title,
+            "objectives": json.loads(q.objectives),
+            "description": q.description or "",
+            "rewards": json.loads(q.rewards) if q.rewards else {},
+        }
+        for q in result.scalars().all()
+    ]
 
     # NPCs
     result = await session.execute(select(NPC).where(NPC.session_id == gs.id))
-    npcs = [{"name": n.name, "disposition": n.disposition, "familiarity": n.familiarity} for n in result.scalars().all()]
+    npcs = [
+        {
+            "name": n.name,
+            "disposition": n.disposition,
+            "familiarity": n.familiarity,
+            "description": n.description or "",
+        }
+        for n in result.scalars().all()
+    ]
 
     # Combat & environment
     combat = json.loads(gs.combat_state) if gs.combat_state else None

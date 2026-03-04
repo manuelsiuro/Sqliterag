@@ -34,27 +34,25 @@ export const MessageBubble = memo(
     }, [isUser, isStreamingMsg, message.content]);
 
     const handleAction = (label: string) => {
-      useChatStore.getState().sendMessage(label);
+      useChatStore.getState().setPendingInput(label);
     };
 
     return (
       <div
         className={`group relative flex ${isUser ? "justify-end" : "justify-start"} mb-4`}
       >
-        {/* Copy button for assistant messages — appears on left */}
-        {!isUser && (
-          <div className="absolute -right-10 top-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-            <CopyButton text={message.content} size="sm" />
-          </div>
-        )}
-
         <div
-          className={`max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed ${
+          className={`relative max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed ${
             isUser
               ? "bg-blue-600 text-white rounded-br-md"
               : "bg-gradient-to-br from-gray-900 to-gray-800/90 border border-gray-700/30 border-l-2 border-l-indigo-500/40 text-gray-100 rounded-bl-md"
           }`}
         >
+          {/* Copy button — inside bubble */}
+          <div className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+            <CopyButton text={message.content} size="sm" />
+          </div>
+
           {isUser ? (
             <p className="whitespace-pre-wrap">{message.content}</p>
           ) : parsed ? (
@@ -71,13 +69,6 @@ export const MessageBubble = memo(
             <MarkdownRenderer content={message.content} />
           )}
         </div>
-
-        {/* Copy button for user messages — appears on right */}
-        {isUser && (
-          <div className="absolute -left-10 top-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-            <CopyButton text={message.content} size="sm" />
-          </div>
-        )}
       </div>
     );
   },

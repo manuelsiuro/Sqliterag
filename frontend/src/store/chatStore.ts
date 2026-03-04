@@ -13,6 +13,7 @@ interface ChatState {
   isLoading: boolean;
   error: string | null;
   abortController: AbortController | null;
+  pendingInput: string | null;
 
   loadConversations: () => Promise<void>;
   createConversation: (model?: string) => Promise<Conversation>;
@@ -22,6 +23,7 @@ interface ChatState {
   sendMessage: (message: string) => void;
   stopStreaming: () => void;
   clearError: () => void;
+  setPendingInput: (text: string | null) => void;
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
@@ -34,6 +36,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   isLoading: false,
   error: null,
   abortController: null,
+  pendingInput: null,
 
   loadConversations: async () => {
     try {
@@ -203,4 +206,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   clearError: () => set({ error: null }),
+
+  setPendingInput: (text: string | null) => set({ pendingInput: text }),
 }));

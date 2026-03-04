@@ -38,12 +38,38 @@ interface CharacterState {
   inventory: InventoryItem[];
 }
 
+interface QuestRewards {
+  xp?: number;
+  gold?: number;
+  items?: string[];
+}
+
+interface QuestObjective {
+  description?: string;
+  text?: string;
+  completed?: boolean;
+}
+
+interface QuestState {
+  title: string;
+  objectives: QuestObjective[];
+  description: string;
+  rewards: QuestRewards;
+}
+
+interface NPCState {
+  name: string;
+  disposition: string;
+  familiarity: string;
+  description: string;
+}
+
 interface GameState {
   world_name: string;
   characters: CharacterState[];
   current_location: { name: string; description: string; biome: string } | null;
-  active_quests: { title: string; objectives: unknown[] }[];
-  npcs: { name: string; disposition: string; familiarity: string }[];
+  active_quests: QuestState[];
+  npcs: NPCState[];
   in_combat: boolean;
   combat: unknown;
   environment: { time_of_day: string; weather: string; season: string };
@@ -87,6 +113,19 @@ const CLASS_ICONS: Record<string, string> = {
 const RARITY_COLORS: Record<string, string> = {
   common: "text-gray-400", uncommon: "text-green-400", rare: "text-blue-400",
   "very rare": "text-purple-400", legendary: "text-amber-400", artifact: "text-red-400",
+};
+
+const RARITY_BORDER: Record<string, string> = {
+  common: "border-l-gray-600", uncommon: "border-l-green-500", rare: "border-l-blue-500",
+  "very rare": "border-l-purple-500", legendary: "border-l-amber-400", artifact: "border-l-red-500",
+};
+
+const DISPOSITION_COLORS: Record<string, string> = {
+  hostile: "text-red-400 bg-red-900/30 border-red-700/30",
+  unfriendly: "text-orange-400 bg-orange-900/30 border-orange-700/30",
+  neutral: "text-gray-400 bg-gray-800/50 border-gray-600/30",
+  friendly: "text-green-400 bg-green-900/30 border-green-700/30",
+  helpful: "text-emerald-400 bg-emerald-900/30 border-emerald-700/30",
 };
 
 const TYPE_ICONS: Record<string, string> = {
@@ -224,7 +263,7 @@ function InventorySection({ inventory }: { inventory: InventoryItem[] }) {
       {open && (
         <div className="mt-1 space-y-0.5 pl-2">
           {sorted.map((item, i) => (
-            <div key={i} className="flex items-center gap-1.5 text-[10px] bg-gray-800/40 rounded px-1.5 py-1 border border-gray-700/20">
+            <div key={i} className={`flex items-center gap-1.5 text-[10px] bg-gray-800/40 rounded px-1.5 py-1 border border-gray-700/20 border-l-2 ${RARITY_BORDER[item.rarity] || "border-l-gray-600"}`}>
               <span>{TYPE_ICONS[item.item_type] || "\uD83D\uDCE6"}</span>
               <span className={`flex-1 truncate ${RARITY_COLORS[item.rarity] || "text-gray-400"}`}>
                 {item.name}
@@ -235,6 +274,7 @@ function InventorySection({ inventory }: { inventory: InventoryItem[] }) {
                   E
                 </span>
               )}
+              <span className="text-[9px] text-gray-600 capitalize">{item.item_type}</span>
               {item.weight != null && (
                 <span className="text-gray-600">{item.weight}lb</span>
               )}
@@ -243,6 +283,105 @@ function InventorySection({ inventory }: { inventory: InventoryItem[] }) {
               )}
             </div>
           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function QuestCard({ q }: { q: QuestState }) {
+  const [open, setOpen] = useState(false);
+  const hasRewards = q.rewards && (q.rewards.xp || q.rewards.gold || (q.rewards.items && q.rewards.items.length > 0));
+
+  return (
+    <div className="bg-amber-900/20 rounded-lg border border-amber-800/30">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-1.5 w-full px-2 py-1.5 text-left"
+      >
+        <span className="transition-transform duration-150 text-[10px] text-gray-500" style={{ transform: open ? "rotate(90deg)" : "rotate(0deg)" }}>
+          {"\u25B6"}
+        </span>
+        <span className="text-xs text-amber-300 flex-1 truncate">{q.title}</span>
+        {q.objectives.length > 0 && (
+          <span className="text-[9px] text-gray-500">
+            {q.objectives.filter((o) => o.completed).length}/{q.objectives.length}
+          </span>
+        )}
+      </button>
+      {open && (
+        <div className="px-2.5 pb-2 space-y-1.5">
+          {q.description && (
+            <div className="text-[10px] text-gray-400 italic">{q.description}</div>
+          )}
+          {q.objectives.length > 0 && (
+            <div className="space-y-0.5">
+              {q.objectives.map((obj, i) => {
+                const text = obj.description || obj.text || `Objective ${i + 1}`;
+                return (
+                  <div key={i} className="flex items-start gap-1 text-[10px]">
+                    <span className={obj.completed ? "text-green-400" : "text-gray-600"}>
+                      {obj.completed ? "\u2611" : "\u2610"}
+                    </span>
+                    <span className={obj.completed ? "text-gray-500 line-through" : "text-gray-300"}>
+                      {text}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {hasRewards && (
+            <div className="flex flex-wrap gap-1.5 pt-0.5">
+              {q.rewards.xp && (
+                <span className="text-[9px] px-1.5 py-px rounded-full bg-purple-900/40 text-purple-300 border border-purple-700/30">
+                  {q.rewards.xp} XP
+                </span>
+              )}
+              {q.rewards.gold && (
+                <span className="text-[9px] px-1.5 py-px rounded-full bg-yellow-900/40 text-yellow-300 border border-yellow-700/30">
+                  {q.rewards.gold} GP
+                </span>
+              )}
+              {q.rewards.items?.map((item) => (
+                <span key={item} className="text-[9px] px-1.5 py-px rounded-full bg-sky-900/40 text-sky-300 border border-sky-700/30">
+                  {item}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function NPCCard({ n }: { n: NPCState }) {
+  const [open, setOpen] = useState(false);
+  const dispStyle = DISPOSITION_COLORS[n.disposition] || DISPOSITION_COLORS.neutral;
+
+  return (
+    <div className="bg-purple-900/20 rounded-lg border border-purple-800/30">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-1.5 w-full px-2 py-1.5 text-left"
+      >
+        <span className="transition-transform duration-150 text-[10px] text-gray-500" style={{ transform: open ? "rotate(90deg)" : "rotate(0deg)" }}>
+          {"\u25B6"}
+        </span>
+        <span className="text-xs text-purple-300 flex-1 truncate">{n.name}</span>
+        <span className={`text-[9px] px-1.5 py-px rounded-full border capitalize ${dispStyle}`}>
+          {n.disposition}
+        </span>
+      </button>
+      {open && (
+        <div className="px-2.5 pb-2 space-y-1">
+          {n.description && (
+            <div className="text-[10px] text-gray-400 italic">{n.description}</div>
+          )}
+          <div className="text-[10px] text-gray-500">
+            Familiarity: <span className="text-gray-300 capitalize">{n.familiarity}</span>
+          </div>
         </div>
       )}
     </div>
@@ -389,11 +528,9 @@ export function GamePanel() {
                 <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">
                   Quests ({gameState.active_quests.length})
                 </h3>
-                <div className="space-y-1">
+                <div className="space-y-1.5">
                   {gameState.active_quests.map((q) => (
-                    <div key={q.title} className="text-xs text-amber-300 bg-amber-900/20 px-2 py-1 rounded border border-amber-800/30">
-                      {q.title}
-                    </div>
+                    <QuestCard key={q.title} q={q} />
                   ))}
                 </div>
               </section>
@@ -405,14 +542,9 @@ export function GamePanel() {
                 <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">
                   NPCs ({gameState.npcs.length})
                 </h3>
-                <div className="flex flex-wrap gap-1">
+                <div className="space-y-1.5">
                   {gameState.npcs.map((n) => (
-                    <span
-                      key={n.name}
-                      className="text-[10px] px-1.5 py-0.5 rounded bg-purple-900/30 text-purple-300 border border-purple-700/40 capitalize"
-                    >
-                      {n.name} ({n.disposition})
-                    </span>
+                    <NPCCard key={n.name} n={n} />
                   ))}
                 </div>
               </section>

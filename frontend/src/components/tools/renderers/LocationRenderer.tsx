@@ -106,6 +106,20 @@ export function LocationRenderer({ data }: ToolRendererProps) {
     );
   }
 
+  // Environment update card
+  if (raw.type === "environment") {
+    const env = raw as unknown as { time_of_day: string; weather: string; season: string };
+    return (
+      <div className="mt-2 bg-gray-800/30 rounded-lg px-3 py-2.5 border border-gray-700/30 space-y-2">
+        <div className="flex items-center gap-2 text-sm">
+          <span className="text-base">{"\uD83C\uDF0D"}</span>
+          <span className="font-medium text-sky-200">Environment Updated</span>
+        </div>
+        <EnvironmentPills env={env} />
+      </div>
+    );
+  }
+
   const d = raw as unknown as LocationData;
 
   const exits = d.exits ? Object.entries(d.exits) : [];

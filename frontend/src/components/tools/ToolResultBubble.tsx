@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Message } from "@/types";
 import { tryParseToolResult, getToolRenderer } from "./renderers";
 import { TOOL_ICONS, DEFAULT_TOOL_ICON } from "./toolIcons";
+import { CopyButton } from "@/components/common";
 
 interface ToolResultBubbleProps {
   message: Message;
@@ -18,8 +19,12 @@ export function ToolResultBubble({ message }: ToolResultBubbleProps) {
   const icon = TOOL_ICONS[toolName] || DEFAULT_TOOL_ICON;
 
   return (
-    <div className="flex justify-start mb-4">
-      <div className="max-w-[80%] px-4 py-3 rounded-2xl rounded-bl-md bg-gray-900/60 border border-gray-700/40 text-gray-100 text-sm">
+    <div className="group flex justify-start mb-4">
+      <div className="relative max-w-[80%] px-4 py-3 rounded-2xl rounded-bl-md bg-gray-900/60 border border-gray-700/40 text-gray-100 text-sm">
+        {/* Copy button — inside bubble */}
+        <div className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+          <CopyButton text={message.content} size="sm" />
+        </div>
         <div className="flex items-center gap-2 mb-1">
           <span className="text-base">{icon}</span>
           <span className="text-[10px] uppercase tracking-wider text-gray-400 font-medium">{toolName}</span>

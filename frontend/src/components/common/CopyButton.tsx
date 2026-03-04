@@ -20,7 +20,7 @@ export function CopyButton({ text, size = "sm" }: CopyButtonProps) {
   return (
     <button
       onClick={handleCopy}
-      className={`${padding} rounded text-xs flex items-center gap-1 transition-colors cursor-pointer ${
+      className={`${padding} rounded text-xs flex items-center gap-1 transition-colors cursor-pointer bg-gray-800/80 backdrop-blur-sm ${
         copied
           ? "text-green-400"
           : "text-gray-400 hover:text-gray-200 hover:bg-gray-700/60"

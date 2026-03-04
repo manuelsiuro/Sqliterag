@@ -1,4 +1,5 @@
-import { useState, type KeyboardEvent } from "react";
+import { useState, useEffect, useRef, type KeyboardEvent } from "react";
+import { useChatStore } from "@/store/chatStore";
 
 interface ChatInputProps {
   onSend: (message: string) => void;
@@ -9,6 +10,24 @@ interface ChatInputProps {
 
 export function ChatInput({ onSend, disabled, isStreaming, onStop }: ChatInputProps) {
   const [input, setInput] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const pendingInput = useChatStore((s) => s.pendingInput);
+
+  useEffect(() => {
+    if (pendingInput !== null) {
+      setInput(pendingInput);
+      useChatStore.getState().setPendingInput(null);
+      // Focus and move cursor to end
+      setTimeout(() => {
+        const el = textareaRef.current;
+        if (el) {
+          el.focus();
+          el.style.height = "auto";
+          el.style.height = Math.min(el.scrollHeight, 200) + "px";
+        }
+      }, 0);
+    }
+  }, [pendingInput]);
 
   const handleSend = () => {
     const trimmed = input.trim();
@@ -28,6 +47,7 @@ export function ChatInput({ onSend, disabled, isStreaming, onStop }: ChatInputPr
     <div className="border-t border-gray-800 p-4">
       <div className="flex gap-2 items-end max-w-4xl mx-auto">
         <textarea
+          ref={textareaRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
