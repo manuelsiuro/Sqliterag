@@ -63,6 +63,13 @@ class Settings(BaseSettings):
     memory_search_top_k: int = 5
     memory_search_candidates_k: int = 20
 
+    # Stanford retrieval scoring (Phase 2.4)
+    memory_stanford_scoring_enabled: bool = True
+    memory_alpha_recency: float = 1.0
+    memory_alpha_importance: float = 1.0
+    memory_alpha_relevance: float = 1.0
+    memory_recency_decay: float = 0.995
+
     # Server
     host: str = "0.0.0.0"
     port: int = 8000

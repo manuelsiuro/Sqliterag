@@ -212,10 +212,10 @@ class ChatService:
         if phase is not None and settings.memory_hybrid_search_enabled:
             try:
                 from app.services.rpg_service import get_or_create_session as get_game_session
-                from app.services.memory_service import search_hybrid, get_memories_by_ids
+                from app.services.memory_service import search_with_stanford_scoring, get_memories_by_ids
 
                 game_session = await get_game_session(session, conversation_id)
-                memory_results = await search_hybrid(
+                memory_results = await search_with_stanford_scoring(
                     session, user_message,
                     embedding_service=self.embedding_service,
                     session_id=game_session.id,

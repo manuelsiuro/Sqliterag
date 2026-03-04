@@ -478,6 +478,116 @@ async def touch_memory(session: AsyncSession, memory: GameMemory) -> None:
     memory.last_accessed = datetime.now(timezone.utc)
 
 
+# ---------------------------------------------------------------------------
+# Stanford Generative Agents scoring (Phase 2.4)
+# ---------------------------------------------------------------------------
+
+def _compute_recency(memory: GameMemory, decay: float) -> float:
+    """Exponential decay based on hours since last_accessed."""
+    now = datetime.now(timezone.utc)
+    last = memory.last_accessed or memory.created_at
+    if last.tzinfo is None:
+        from datetime import timezone as _tz
+        last = last.replace(tzinfo=_tz.utc)
+    hours = (now - last).total_seconds() / 3600.0
+    return decay ** hours
+
+
+def _min_max_normalize(values: list[float]) -> list[float]:
+    """Normalize values to [0, 1] range. Returns all 1.0 if no spread."""
+    if not values:
+        return []
+    lo, hi = min(values), max(values)
+    if hi - lo < 1e-9:
+        return [1.0] * len(values)
+    return [(v - lo) / (hi - lo) for v in values]
+
+
+async def search_with_stanford_scoring(
+    session: AsyncSession,
+    query: str,
+    *,
+    embedding_service: BaseEmbeddingService | None = None,
+    session_id: str | None = None,
+    top_k: int | None = None,
+) -> list[tuple[str, float]]:
+    """Stanford Generative Agents reranker on top of hybrid RRF candidates.
+
+    Score = α_rel * relevance + α_rec * recency + α_imp * importance
+    All components min-max normalized to [0,1].
+
+    Falls back to plain search_hybrid() when stanford scoring is disabled.
+    """
+    if not settings.memory_stanford_scoring_enabled:
+        return await search_hybrid(
+            session, query,
+            embedding_service=embedding_service,
+            session_id=session_id,
+            top_k=top_k,
+        )
+
+    k = top_k or settings.memory_search_top_k
+
+    # Step 1: Get RRF candidates (up to candidates_k)
+    rrf_results = await search_hybrid(
+        session, query,
+        embedding_service=embedding_service,
+        session_id=session_id,
+        top_k=settings.memory_search_candidates_k,
+    )
+    if not rrf_results:
+        return []
+
+    # Step 2: Fetch full GameMemory objects for scoring
+    memory_ids = [mid for mid, _score in rrf_results]
+    memories = await get_memories_by_ids(session, memory_ids)
+    if not memories:
+        return []
+
+    mem_map = {m.id: m for m in memories}
+    # Filter to only IDs we actually got back
+    rrf_results = [(mid, score) for mid, score in rrf_results if mid in mem_map]
+
+    # Step 3: Compute raw component scores
+    decay = settings.memory_recency_decay
+    raw_relevance = [score for _mid, score in rrf_results]
+    raw_recency = [_compute_recency(mem_map[mid], decay) for mid, _score in rrf_results]
+    raw_importance = [mem_map[mid].importance_score or 0.5 for mid, _score in rrf_results]
+
+    # Step 4: Min-max normalize each component
+    norm_relevance = _min_max_normalize(raw_relevance)
+    norm_recency = _min_max_normalize(raw_recency)
+    norm_importance = _min_max_normalize(raw_importance)
+
+    # Step 5: Weighted combination
+    α_rel = settings.memory_alpha_relevance
+    α_rec = settings.memory_alpha_recency
+    α_imp = settings.memory_alpha_importance
+
+    scored: list[tuple[str, float]] = []
+    for i, (mid, _rrf_score) in enumerate(rrf_results):
+        final = (
+            α_rel * norm_relevance[i]
+            + α_rec * norm_recency[i]
+            + α_imp * norm_importance[i]
+        )
+        scored.append((mid, final))
+
+    scored.sort(key=lambda x: x[1], reverse=True)
+    top = scored[:k]
+
+    # Step 6: Touch accessed memories (update last_accessed)
+    for mid, _score in top:
+        if mid in mem_map:
+            await touch_memory(session, mem_map[mid])
+
+    logger.info(
+        "Stanford scoring: %d candidates → %d results (top score=%.4f)",
+        len(rrf_results), len(top), top[0][1] if top else 0.0,
+    )
+    return top
+
+
 async def rebuild_fts_index(session: AsyncSession) -> int:
     """Full reindex from game_memories -> fts_memories. Returns row count."""
     try:
