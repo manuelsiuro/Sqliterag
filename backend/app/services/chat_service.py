@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 from collections.abc import AsyncGenerator
 
 from sqlalchemy import select
@@ -33,6 +34,78 @@ from app.services.tool_service import ToolService
 from app.services.tool_validation import validate_tool_call
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Action-suggestion extraction
+# ---------------------------------------------------------------------------
+
+_ACTION_BOLD_RE = re.compile(r"^(?:\d+[.)]\s*|[-•]\s+)?\*\*(.+?)\*\*\s*[–—\-:]\s*(.+)$")
+_NUMBERED_RE = re.compile(r"^(?:\d+[.)]\s*|[-•]\s+)(.+)$")
+_PROMPT_RE = re.compile(
+    r"^\*{0,2}(what would you like to do|possible next actions|choose an action|"
+    r"pick an action|select an option|what do you do|type what you'?d like to do|"
+    r"your options|here are your options|your choices|available actions)",
+    re.IGNORECASE,
+)
+_TRAILING_JUNK_RE = re.compile(r"^[\s🎮🎲⚔️🗡️🛡️✨💀🐉🧙📜]*$")
+
+
+def _extract_suggestions(content: str) -> list[dict]:
+    """Extract action suggestions from the tail of LLM output.
+
+    Returns a list of ``{"label": ..., "description": ...}`` dicts.
+    Empty list when no action block is detected.
+    """
+    lines = content.rstrip().split("\n")
+
+    # --- Pass 1: bold-format actions (**Label** – Description) ---
+    end = len(lines) - 1
+    # Skip trailing blank/emoji lines AND prompt lines ("What would you like to do?")
+    while end >= 0 and (
+        _TRAILING_JUNK_RE.match(lines[end].strip())
+        or _PROMPT_RE.match(lines[end].strip())
+    ):
+        end -= 1
+    if end < 0:
+        return []
+
+    start = end
+    while start >= 0 and _ACTION_BOLD_RE.match(lines[start].strip()):
+        start -= 1
+    start += 1
+
+    if end - start + 1 >= 2:
+        actions: list[dict] = []
+        for i in range(start, end + 1):
+            m = _ACTION_BOLD_RE.match(lines[i].strip())
+            if m:
+                actions.append({"label": m.group(1).strip(), "description": m.group(2).strip()})
+        return actions
+
+    # --- Pass 2: numbered/bulleted list after a prompt header ---
+    prompt_idx = -1
+    for i in range(len(lines) - 1, -1, -1):
+        if _PROMPT_RE.match(lines[i].strip()):
+            prompt_idx = i
+            break
+    if prompt_idx < 0:
+        return []
+
+    actions = []
+    started = False
+    for i in range(prompt_idx + 1, len(lines)):
+        trimmed = lines[i].strip()
+        if not trimmed or _TRAILING_JUNK_RE.match(trimmed):
+            if started:
+                break
+            continue
+        started = True
+        nm = _NUMBERED_RE.match(trimmed)
+        label = nm.group(1).strip() if nm else trimmed
+        actions.append({"label": label, "description": ""})
+
+    return actions if len(actions) >= 2 else []
+
 
 RAG_SYSTEM_TEMPLATE = (
     "Use the following context to help answer the user's question. "
@@ -300,8 +373,12 @@ class ChatService:
                         )
                         return
 
+                    actions = _extract_suggestions(content)
+                    done_data: dict = {"message_id": assistant_msg.id}
+                    if actions:
+                        done_data["actions"] = actions
                     yield ServerSentEvent(
-                        data=json.dumps({"message_id": assistant_msg.id}),
+                        data=json.dumps(done_data),
                         event="done",
                     )
                     return
@@ -342,7 +419,11 @@ class ChatService:
                 yield ServerSentEvent(data=json.dumps({"error": "Failed to save response."}), event="error")
                 return
 
-            yield ServerSentEvent(data=json.dumps({"message_id": assistant_msg.id}), event="done")
+            actions = _extract_suggestions(full_response)
+            done_data2: dict = {"message_id": assistant_msg.id}
+            if actions:
+                done_data2["actions"] = actions
+            yield ServerSentEvent(data=json.dumps(done_data2), event="done")
 
     async def _load_conversation_tools(
         self, session: AsyncSession, conversation_id: str

@@ -124,13 +124,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
       (token) => {
         set((s) => ({ streamingContent: s.streamingContent + token }));
       },
-      (messageId) => {
+      (messageId, actions) => {
         const content = get().streamingContent;
         const assistantMsg: Message = {
           id: messageId,
           conversation_id: activeConversationId,
           role: "assistant",
           content,
+          ...(actions?.length ? { actions } : {}),
           created_at: new Date().toISOString(),
         };
         set((s) => ({

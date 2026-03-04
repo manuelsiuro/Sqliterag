@@ -6,6 +6,11 @@ export interface Conversation {
   updated_at: string;
 }
 
+export interface ActionSuggestion {
+  label: string;
+  description: string;
+}
+
 export interface Message {
   id: string;
   conversation_id: string;
@@ -13,6 +18,7 @@ export interface Message {
   content: string;
   tool_calls?: Array<{ function: { name: string; arguments: Record<string, unknown> } }> | null;
   tool_name?: string | null;
+  actions?: ActionSuggestion[];
   created_at: string;
 }
 
@@ -92,6 +98,7 @@ export interface ChatTokenEvent {
 
 export interface ChatDoneEvent {
   message_id: string;
+  actions?: ActionSuggestion[];
 }
 
 // Tool types

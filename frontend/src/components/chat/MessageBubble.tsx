@@ -30,8 +30,17 @@ export const MessageBubble = memo(
 
     const parsed = useMemo(() => {
       if (isUser || isStreamingMsg || !message.content) return null;
+      // Prefer structured actions from SSE over regex parsing
+      if (message.actions?.length) {
+        // Strip the action block from content for narrative display
+        const fallback = parseActionSuggestions(message.content);
+        return {
+          narrative: fallback?.narrative ?? message.content,
+          actions: message.actions,
+        };
+      }
       return parseActionSuggestions(message.content);
-    }, [isUser, isStreamingMsg, message.content]);
+    }, [isUser, isStreamingMsg, message.content, message.actions]);
 
     const handleAction = (label: string) => {
       useChatStore.getState().setPendingInput(label);

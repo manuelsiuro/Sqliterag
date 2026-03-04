@@ -8,10 +8,10 @@ export interface ParsedMessage {
   actions: ActionSuggestion[];
 }
 
-const ACTION_LINE_RE = /^\*\*(.+?)\*\*\s*[–—\-:]\s*(.+)$/;
+const ACTION_LINE_RE = /^(?:\d+[.)]\s*|[-•]\s+)?\*\*(.+?)\*\*\s*[–—\-:]\s*(.+)$/;
 
 const PROMPT_LINE_RE =
-  /^\*{0,2}(what would you like to do|type what you'?d like to do|choose an action|pick an action|select an option|what do you do)/i;
+  /^\*{0,2}(what would you like to do|type what you'?d like to do|choose an action|pick an action|select an option|what do you do|your options|here are your options|your choices|available actions)/i;
 
 const TRAILING_EMOJI_LINE_RE = /^[\s🎮🎲⚔️🗡️🛡️✨💀🐉🧙📜]*$/;
 
@@ -31,8 +31,12 @@ export function parseActionSuggestions(content: string): ParsedMessage | null {
   // Walk backward to find where the action block starts
   let actionEnd = lines.length - 1;
 
-  // Skip trailing blank / emoji-only lines
-  while (actionEnd >= 0 && TRAILING_EMOJI_LINE_RE.test(lines[actionEnd].trim())) {
+  // Skip trailing blank / emoji-only lines AND prompt lines
+  while (
+    actionEnd >= 0 &&
+    (TRAILING_EMOJI_LINE_RE.test(lines[actionEnd].trim()) ||
+     PROMPT_LINE_RE.test(lines[actionEnd].trim()))
+  ) {
     actionEnd--;
   }
 

@@ -1,5 +1,6 @@
 import { fetchEventSource } from "@microsoft/fetch-event-source";
 import type {
+  ActionSuggestion,
   Conversation,
   ConversationWithMessages,
   DatabaseInfo,
@@ -56,7 +57,7 @@ export const api = {
     conversationId: string,
     message: string,
     onToken: (token: string) => void,
-    onDone: (messageId: string) => void,
+    onDone: (messageId: string, actions?: ActionSuggestion[]) => void,
     onError: (err: Error) => void,
     parameters?: ModelParameters,
     onToolCall?: (data: ToolCallEvent) => void,
@@ -74,7 +75,7 @@ export const api = {
           onToken(data.token);
         } else if (ev.event === "done") {
           const data = JSON.parse(ev.data);
-          onDone(data.message_id);
+          onDone(data.message_id, data.actions);
         } else if (ev.event === "tool_calls") {
           const data = JSON.parse(ev.data) as ToolCallEvent;
           onToolCall?.(data);
