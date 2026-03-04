@@ -144,10 +144,13 @@ export function LocationRenderer({ data }: ToolRendererProps) {
           {exits.map(([dir, loc], i) => (
             <span
               key={dir}
-              className="text-xs px-2 py-0.5 rounded bg-gray-800 text-gray-300 border border-gray-700/50 animate-item-appear"
+              className="inline-flex items-center gap-1.5 text-xs rounded-full bg-gray-800 border border-gray-700/50 animate-item-appear overflow-hidden"
               style={{ animationDelay: `${i * 40}ms` }}
             >
-              {DIR_ARROWS[dir] || "\u2022"} {dir} &rarr; {loc}
+              <span className="inline-flex items-center gap-0.5 bg-amber-900/30 text-amber-300 border-r border-amber-700/30 px-2 py-0.5 text-[11px]">
+                {DIR_ARROWS[dir] || "\u2022"} {capitalize(dir)}
+              </span>
+              <span className="text-gray-300 pr-2 py-0.5">{loc}</span>
             </span>
           ))}
         </div>

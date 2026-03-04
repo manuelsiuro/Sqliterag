@@ -70,7 +70,9 @@ Each builtin tool returns `json.dumps({...})` with a `"type"` field matching a f
 | `roll_dice` | `roll_dice` | `notation, groups[], total` |
 | `roll_check` | `check_result` | `character, ability, check_type, rolls, chosen, modifier, total, dc, success, nat20, nat1` |
 | `look_around` | `location` | `name, description, biome, exits, characters_here, npcs_here, environment, moved_by` |
-| `connect_locations` | `location_connected` | `location1, location2, direction, reverse_direction` |
+| `connect_locations` | `location_connected` | `location1, location2, direction, reverse_direction` (rendered by LocationRenderer) |
+| `move_to` | `location` | `name, description, biome, exits, characters_here, npcs_here, environment, moved_by` |
+| `set_environment` | `environment` | `time_of_day, weather, season` (rendered by LocationRenderer) |
 | `get_game_state` | `game_state` | `world_name, characters[], current_location, active_quests, npcs, in_combat, environment` |
 
 ## Common Commands

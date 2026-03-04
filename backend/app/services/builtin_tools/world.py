@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from app.services.builtin_tools._common import (
     AsyncSession,
+    get_character_by_name,
     get_location_by_name,
     get_or_create_session,
     json,
