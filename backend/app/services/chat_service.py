@@ -118,10 +118,17 @@ TOKEN_CHUNK_SIZE = 4  # chars per fake "token" when chunking non-streamed respon
 
 
 class ChatService:
-    def __init__(self, llm_service: BaseLLMService, rag_service: RAGService, tool_service: ToolService):
+    def __init__(
+        self,
+        llm_service: BaseLLMService,
+        rag_service: RAGService,
+        tool_service: ToolService,
+        embedding_service: BaseLLMService | None = None,
+    ):
         self.llm_service = llm_service
         self.rag_service = rag_service
         self.tool_service = tool_service
+        self.embedding_service = embedding_service
 
     async def stream_chat(
         self,
@@ -200,6 +207,37 @@ class ChatService:
                 phase = prompt_result.phase
                 messages.insert(0, {"role": "system", "content": dynamic_prompt})
                 budget.system_prompt_tokens = estimate_tokens(dynamic_prompt)
+
+        # Inject relevant game memories into context (Phase 2.3)
+        if phase is not None and settings.memory_hybrid_search_enabled:
+            try:
+                from app.services.rpg_service import get_or_create_session as get_game_session
+                from app.services.memory_service import search_hybrid, get_memories_by_ids
+
+                game_session = await get_game_session(session, conversation_id)
+                memory_results = await search_hybrid(
+                    session, user_message,
+                    embedding_service=self.embedding_service,
+                    session_id=game_session.id,
+                )
+                if memory_results:
+                    memory_ids = [mid for mid, _score in memory_results]
+                    memories = await get_memories_by_ids(session, memory_ids)
+                    if memories:
+                        memory_text = "\n---\n".join(
+                            f"[{m.memory_type}] {m.content}" for m in memories
+                        )
+                        memory_system = (
+                            "Relevant game memories (use these to maintain consistency "
+                            "and recall past events):\n" + memory_text
+                        )
+                        messages.insert(0, {"role": "system", "content": memory_system})
+                        budget.rag_context_tokens += estimate_tokens(memory_system)
+                        logger.info(
+                            "Injected %d game memories into context", len(memories)
+                        )
+            except Exception:
+                logger.warning("Game memory retrieval failed", exc_info=True)
 
         kwargs = {"think": False}
         if options:

@@ -55,6 +55,14 @@ class Settings(BaseSettings):
     # Tool call validation (Phase 1.6)
     tool_validation_enabled: bool = True
 
+    # Game memory hybrid search (Phase 2.3)
+    memory_hybrid_search_enabled: bool = True
+    memory_rrf_k: int = 60
+    memory_weight_fts: float = 0.4
+    memory_weight_vec: float = 0.6
+    memory_search_top_k: int = 5
+    memory_search_candidates_k: int = 20
+
     # Server
     host: str = "0.0.0.0"
     port: int = 8000

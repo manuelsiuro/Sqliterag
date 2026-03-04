@@ -86,6 +86,21 @@ async def init_db() -> None:
                 exc_info=True,
             )
 
+        # Mapping table: vec_memories rowid ↔ GameMemory UUID (Phase 2.3)
+        try:
+            await conn.execute(
+                text(
+                    "CREATE TABLE IF NOT EXISTS vec_memory_map ("
+                    "rowid INTEGER PRIMARY KEY AUTOINCREMENT, "
+                    "memory_id TEXT NOT NULL UNIQUE)"
+                )
+            )
+        except Exception:
+            logger.warning(
+                "Could not create vec_memory_map table",
+                exc_info=True,
+            )
+
         # FTS5 full-text index for game memories (standalone, synced via memory_service)
         try:
             await conn.execute(
@@ -111,6 +126,7 @@ async def init_db() -> None:
 
     # If fts_memories is empty but game_memories has rows, rebuild the FTS index
     await _sync_fts_on_startup()
+    await _warn_vec_on_startup()
 
     await seed_builtin_tools()
     logger.info("Database initialized")
@@ -160,6 +176,28 @@ async def _sync_fts_on_startup() -> None:
             logger.info("Rebuilt fts_memories index from %d existing game memories", mem_count)
     except Exception:
         logger.warning("Could not sync fts_memories on startup", exc_info=True)
+
+
+async def _warn_vec_on_startup() -> None:
+    """Warn if game_memories exist but vec_memory_map is empty (needs rebuild)."""
+    try:
+        async with async_session_factory() as session:
+            vec_count = (
+                await session.execute(text("SELECT COUNT(*) FROM vec_memory_map"))
+            ).scalar() or 0
+            if vec_count > 0:
+                return
+            mem_count = (
+                await session.execute(text("SELECT COUNT(*) FROM game_memories"))
+            ).scalar() or 0
+            if mem_count > 0:
+                logger.warning(
+                    "%d game memories exist but vec_memory_map is empty — "
+                    "run rebuild_vec_index() to enable vector search",
+                    mem_count,
+                )
+    except Exception:
+        logger.warning("Could not check vec_memory_map on startup", exc_info=True)
 
 
 def _schema(required: list[str], properties: dict) -> str:

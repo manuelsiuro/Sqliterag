@@ -30,6 +30,7 @@ def get_chat_service() -> ChatService:
         llm_service=get_ollama_service(),
         rag_service=get_rag_service(),
         tool_service=get_tool_service(),
+        embedding_service=get_ollama_service(),
     )
 
 
