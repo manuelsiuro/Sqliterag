@@ -28,7 +28,7 @@ export function CheckResultRenderer({ data }: ToolRendererProps) {
   const isCheckType = d.check_type === "saving_throw" ? "Saving Throw" : "Ability Check";
 
   return (
-    <div className="mt-2 space-y-2">
+    <div className="mt-2 bg-gray-800/30 rounded-lg px-3 py-2.5 border border-gray-700/30 space-y-2">
       {/* Header */}
       <div className="flex items-center gap-2 text-sm">
         <span className="text-purple-300 font-medium">{d.character}</span>
@@ -58,10 +58,12 @@ export function CheckResultRenderer({ data }: ToolRendererProps) {
         </div>
 
         {/* Breakdown */}
-        <div className="flex flex-col">
-          <span className="text-xs text-gray-500">
-            {d.rolls.length > 1 && `Rolls: [${d.rolls.join(", ")}] → ${d.chosen}`}
-            {d.rolls.length === 1 && `d20: ${d.chosen}`}
+        <div className="flex flex-col gap-1">
+          <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-gray-800/60 text-gray-400 border border-gray-700/40 w-fit">
+            {d.rolls.length > 1
+              ? <>🎲 [{d.rolls.join(", ")}] → <span className="text-gray-200 font-medium">{d.chosen}</span></>
+              : <>🎲 d20: <span className="text-gray-200 font-medium">{d.chosen}</span></>
+            }
           </span>
           <span className="text-sm text-gray-300">
             {d.chosen} {d.modifier >= 0 ? "+" : ""}{d.modifier} = <strong className="text-white">{d.total}</strong>

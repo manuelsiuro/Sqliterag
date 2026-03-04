@@ -68,6 +68,10 @@ Each builtin tool returns `json.dumps({...})` with a `"type"` field matching a f
 | `create_character` | `character_sheet` | Full character sheet fields |
 | `attack` | `attack_result` | `attacker, target, weapon, attack_rolls, hit, damage, ...` |
 | `roll_dice` | `roll_dice` | `notation, groups[], total` |
+| `roll_check` | `check_result` | `character, ability, check_type, rolls, chosen, modifier, total, dc, success, nat20, nat1` |
+| `look_around` | `location` | `name, description, biome, exits, characters_here, npcs_here, environment, moved_by` |
+| `connect_locations` | `location_connected` | `location1, location2, direction, reverse_direction` |
+| `get_game_state` | `game_state` | `world_name, characters[], current_location, active_quests, npcs, in_combat, environment` |
 
 ## Common Commands
 
@@ -91,3 +95,9 @@ cd backend && alembic upgrade head
 - **Backend**: Async-first, `async def` everywhere, SQLAlchemy async sessions
 - **Tool results**: Always include `"type"` field, optionally `"error"` for error states
 - **Renderer error handling**: Every renderer checks `if (d.error)` first, returns red error text
+
+## Development Philosophy
+
+- **Value-first**: Every feature must deliver visible, testable value in the running application. No "write code to write code" — infrastructure is only justified when it directly enables a user-facing outcome.
+- **Working app over unit tests**: Unit tests are welcome but secondary. The primary verification is a working application tested end-to-end via Chrome MCP (browser screenshots, snapshots, interaction).
+- **Chrome MCP verification**: All features must include browser-based verification steps using Chrome DevTools MCP tools (take_snapshot, take_screenshot, click, fill, navigate_page). This confirms the feature works in the real UI, not just in isolation.
