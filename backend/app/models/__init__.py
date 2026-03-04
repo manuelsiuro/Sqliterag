@@ -4,6 +4,7 @@ from app.models.document import Document, DocumentChunk
 from app.models.message import Message
 from app.models.rpg import (
     Character,
+    GameMemory,
     GameSession,
     InventoryItem,
     Item,
@@ -18,6 +19,7 @@ __all__ = [
     "Base",
     "Character",
     "Conversation",
+    "GameMemory",
     "ConversationTool",
     "Document",
     "DocumentChunk",

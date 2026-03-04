@@ -72,7 +72,46 @@ async def init_db() -> None:
                 "vector search will be unavailable until sqlite-vec is loaded",
                 exc_info=True,
             )
+        try:
+            await conn.execute(
+                text(
+                    "CREATE VIRTUAL TABLE IF NOT EXISTS vec_memories "
+                    "USING vec0(embedding float[768])"
+                )
+            )
+        except Exception:
+            logger.warning(
+                "Could not create vec_memories table — "
+                "memory embeddings will be unavailable until sqlite-vec is loaded",
+                exc_info=True,
+            )
+
+        # FTS5 full-text index for game memories (standalone, synced via memory_service)
+        try:
+            await conn.execute(
+                text(
+                    "CREATE VIRTUAL TABLE IF NOT EXISTS fts_memories "
+                    "USING fts5(content, entity_names, memory_id UNINDEXED)"
+                )
+            )
+        except Exception:
+            logger.warning(
+                "Could not create fts_memories table — "
+                "full-text search for game memories will be unavailable",
+                exc_info=True,
+            )
+
+        # Drop orphaned rpg_chronicle table (superseded by game_memories)
+        try:
+            await conn.execute(text("DROP TABLE IF EXISTS rpg_chronicle"))
+        except Exception:
+            pass
+
         await _migrate_messages_table(conn)
+
+    # If fts_memories is empty but game_memories has rows, rebuild the FTS index
+    await _sync_fts_on_startup()
+
     await seed_builtin_tools()
     logger.info("Database initialized")
 
@@ -90,6 +129,37 @@ async def _migrate_messages_table(conn) -> None:
         except Exception:
             # Column already exists — expected on subsequent starts
             pass
+
+
+async def _sync_fts_on_startup() -> None:
+    """If fts_memories is empty but game_memories has rows, rebuild the FTS index."""
+    try:
+        async with async_session_factory() as session:
+            fts_count = (
+                await session.execute(
+                    text("SELECT COUNT(*) FROM fts_memories")
+                )
+            ).scalar() or 0
+            if fts_count > 0:
+                return
+            mem_count = (
+                await session.execute(
+                    text("SELECT COUNT(*) FROM game_memories")
+                )
+            ).scalar() or 0
+            if mem_count == 0:
+                return
+            # Populate FTS from existing game_memories
+            await session.execute(
+                text(
+                    "INSERT INTO fts_memories(content, entity_names, memory_id) "
+                    "SELECT content, entity_names, id FROM game_memories"
+                )
+            )
+            await session.commit()
+            logger.info("Rebuilt fts_memories index from %d existing game memories", mem_count)
+    except Exception:
+        logger.warning("Could not sync fts_memories on startup", exc_info=True)
 
 
 def _schema(required: list[str], properties: dict) -> str:

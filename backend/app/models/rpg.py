@@ -31,6 +31,7 @@ class GameSession(Base):
     locations: Mapped[list[Location]] = relationship(back_populates="game_session", cascade="all, delete-orphan")
     npcs: Mapped[list[NPC]] = relationship(back_populates="game_session", cascade="all, delete-orphan")
     quests: Mapped[list[Quest]] = relationship(back_populates="game_session", cascade="all, delete-orphan")
+    memories: Mapped[list[GameMemory]] = relationship(back_populates="game_session", cascade="all, delete-orphan")
 
 
 # ---------------------------------------------------------------------------
@@ -163,3 +164,23 @@ class Quest(Base):
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
     game_session: Mapped[GameSession] = relationship(back_populates="quests")
+
+
+# ---------------------------------------------------------------------------
+# GameMemory — three-tier memory for RAG-enhanced recall
+# ---------------------------------------------------------------------------
+class GameMemory(Base):
+    __tablename__ = "game_memories"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    session_id: Mapped[str] = mapped_column(String(36), ForeignKey("rpg_game_sessions.id", ondelete="CASCADE"))
+    memory_type: Mapped[str] = mapped_column(String(20))       # procedural | episodic | semantic
+    entity_type: Mapped[str | None] = mapped_column(String(20), nullable=True)  # character | location | npc | quest | item | event
+    content: Mapped[str] = mapped_column(Text)
+    importance_score: Mapped[float] = mapped_column(Float, default=0.5)  # 0.0 to 1.0
+    session_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    entity_names: Mapped[str] = mapped_column(Text, default="[]")  # JSON array
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    last_accessed: Mapped[datetime] = mapped_column(server_default=func.now())
+
+    game_session: Mapped[GameSession] = relationship(back_populates="memories")
