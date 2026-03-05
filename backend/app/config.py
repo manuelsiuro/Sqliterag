@@ -100,6 +100,13 @@ class Settings(BaseSettings):
     # Recursive CTE traversal (Phase 3.5)
     graph_max_traversal_depth: int = 3
 
+    # GraphRAG integration (Phase 3.6)
+    graphrag_enabled: bool = True
+    graphrag_max_expansion_entities: int = 6
+    graphrag_traversal_depth: int = 1
+    graphrag_min_strength: int = 30
+    graphrag_weight: float = 0.3
+
     # Server
     host: str = "0.0.0.0"
     port: int = 8000

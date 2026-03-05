@@ -15,11 +15,11 @@ import struct
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import delete, select, text
+from sqlalchemy import delete, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.models.rpg import GameMemory
+from app.models.rpg import Character, GameMemory, Location, NPC, Quest, Relationship
 from app.services.base import BaseEmbeddingService
 
 logger = logging.getLogger(__name__)
@@ -636,6 +636,192 @@ async def search_with_stanford_scoring(
         len(rrf_results), len(top), top[0][1] if top else 0.0,
     )
     return top
+
+
+# ---------------------------------------------------------------------------
+# GraphRAG integration (Phase 3.6)
+# ---------------------------------------------------------------------------
+
+async def _extract_entities_from_query(
+    session: AsyncSession,
+    game_session_id: str,
+    query: str,
+) -> list[tuple[str, str, str]]:
+    """Find known entity names that appear in the query via word-boundary match.
+
+    Returns list of (entity_type, entity_id, entity_name) tuples.
+    """
+    # Fetch all known entity names for the session in one pass
+    entities: list[tuple[str, str, str]] = []
+
+    char_rows = (await session.execute(
+        select(Character.id, Character.name).where(Character.session_id == game_session_id)
+    )).fetchall()
+    for eid, name in char_rows:
+        entities.append(("character", eid, name))
+
+    npc_rows = (await session.execute(
+        select(NPC.id, NPC.name).where(NPC.session_id == game_session_id)
+    )).fetchall()
+    for eid, name in npc_rows:
+        entities.append(("npc", eid, name))
+
+    loc_rows = (await session.execute(
+        select(Location.id, Location.name).where(Location.session_id == game_session_id)
+    )).fetchall()
+    for eid, name in loc_rows:
+        entities.append(("location", eid, name))
+
+    quest_rows = (await session.execute(
+        select(Quest.id, Quest.title).where(Quest.session_id == game_session_id)
+    )).fetchall()
+    for eid, title in quest_rows:
+        entities.append(("quest", eid, title))
+
+    # Word-boundary match against query
+    matches = []
+    for etype, eid, name in entities:
+        if re.search(r"\b" + re.escape(name) + r"\b", query, re.IGNORECASE):
+            matches.append((etype, eid, name))
+
+    logger.info("GraphRAG: extracted %d entities from query: %s", len(matches), [m[2] for m in matches])
+    return matches
+
+
+async def _expand_entities_via_graph(
+    session: AsyncSession,
+    game_session_id: str,
+    seeds: list[tuple[str, str, str]],
+) -> list[str]:
+    """Expand seed entities to their direct graph neighbors.
+
+    Returns a list of neighbor display names (deduplicated against seeds),
+    capped at graphrag_max_expansion_entities, sorted by strength descending.
+    """
+    min_strength = settings.graphrag_min_strength
+    seed_keys = {(etype, eid) for etype, eid, _ in seeds}
+
+    # Build OR conditions for both outgoing and incoming edges
+    source_conds = [
+        (Relationship.source_type == etype) & (Relationship.source_id == eid)
+        for etype, eid, _ in seeds
+    ]
+    target_conds = [
+        (Relationship.target_type == etype) & (Relationship.target_id == eid)
+        for etype, eid, _ in seeds
+    ]
+
+    q = (
+        select(Relationship)
+        .where(
+            Relationship.session_id == game_session_id,
+            Relationship.strength >= min_strength,
+            or_(*source_conds, *target_conds),
+        )
+        .order_by(Relationship.strength.desc())
+    )
+    result = await session.execute(q)
+    rels = result.scalars().all()
+
+    # Collect neighbor (type, id) pairs that are NOT in seed set
+    neighbors: list[tuple[str, str, int]] = []
+    seen: set[tuple[str, str]] = set()
+    for r in rels:
+        # For each relationship, the "other" side is the neighbor
+        for ntype, nid in [
+            (r.source_type, r.source_id),
+            (r.target_type, r.target_id),
+        ]:
+            key = (ntype, nid)
+            if key not in seed_keys and key not in seen:
+                seen.add(key)
+                neighbors.append((ntype, nid, r.strength))
+
+    # Cap at max expansion entities
+    neighbors = neighbors[: settings.graphrag_max_expansion_entities]
+
+    # Resolve IDs to display names
+    from app.services.rpg_service import resolve_entity_name
+
+    names = []
+    for ntype, nid, _strength in neighbors:
+        name = await resolve_entity_name(session, ntype, nid)
+        names.append(name)
+
+    logger.info("GraphRAG: expanded to %d neighbors: %s", len(names), names)
+    return names
+
+
+async def search_graphrag(
+    session: AsyncSession,
+    query: str,
+    *,
+    embedding_service: BaseEmbeddingService | None = None,
+    session_id: str | None = None,
+    game_session_id: str | None = None,
+    memory_types: list[str] | None = None,
+    entity_types: list[str] | None = None,
+    session_range: tuple[int, int] | None = None,
+    top_k: int | None = None,
+) -> list[tuple[str, float]]:
+    """GraphRAG-augmented memory search.
+
+    Runs primary Stanford scoring search, then optionally expands via
+    graph neighbors for structurally related memories.
+    Falls back to plain search_with_stanford_scoring on any graph error.
+    """
+    filter_kw = dict(
+        embedding_service=embedding_service,
+        session_id=session_id,
+        memory_types=memory_types,
+        entity_types=entity_types,
+        session_range=session_range,
+        top_k=top_k,
+    )
+
+    # Step 1: Primary search — always runs
+    primary = await search_with_stanford_scoring(session, query, **filter_kw)
+
+    # Step 2: Graph expansion (optional)
+    if not settings.graphrag_enabled or not game_session_id:
+        return primary
+
+    try:
+        seeds = await _extract_entities_from_query(session, game_session_id, query)
+        if not seeds:
+            return primary
+
+        expansion_names = await _expand_entities_via_graph(session, game_session_id, seeds)
+        if not expansion_names:
+            return primary
+
+        # Build augmented query from expansion names
+        augmented_query = " ".join(expansion_names)
+        graph_results = await search_with_stanford_scoring(
+            session, augmented_query, **filter_kw,
+        )
+
+        # Merge: primary keeps full scores, graph results weighted down
+        weight = settings.graphrag_weight
+        primary_ids = {mid for mid, _ in primary}
+        merged: dict[str, float] = {mid: score for mid, score in primary}
+
+        for mid, score in graph_results:
+            if mid not in primary_ids:
+                merged[mid] = score * weight
+
+        k = top_k or settings.memory_search_top_k
+        final = sorted(merged.items(), key=lambda x: x[1], reverse=True)[:k]
+
+        logger.info(
+            "GraphRAG: %d primary + %d graph -> %d merged",
+            len(primary), len(graph_results), len(final),
+        )
+        return final
+
+    except Exception:
+        logger.warning("GraphRAG expansion failed, returning primary results", exc_info=True)
+        return primary
 
 
 async def rebuild_fts_index(session: AsyncSession) -> int:

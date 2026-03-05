@@ -221,16 +221,17 @@ class ChatService:
         if phase is not None and settings.memory_hybrid_search_enabled:
             try:
                 from app.services.rpg_service import get_or_create_session as get_game_session
-                from app.services.memory_service import search_with_stanford_scoring, get_memories_by_ids
+                from app.services.memory_service import search_graphrag, get_memories_by_ids
 
                 game_session = await get_game_session(session, conversation_id)
                 preferred_types = None
                 if settings.memory_prefilter_enabled and phase is not None:
                     preferred_types = _PHASE_MEMORY_TYPES.get(phase)
-                memory_results = await search_with_stanford_scoring(
+                memory_results = await search_graphrag(
                     session, user_message,
                     embedding_service=self.embedding_service,
                     session_id=game_session.id,
+                    game_session_id=game_session.id,
                     memory_types=preferred_types,
                 )
                 if memory_results:
