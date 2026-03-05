@@ -12,10 +12,10 @@ import json
 import logging
 from typing import NamedTuple
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.rpg import Character, GameSession, Location, NPC, Quest
+from app.models.rpg import Character, GameSession, Location, NPC, Quest, Relationship
 from app.services.rpg_service import get_or_create_session
 
 logger = logging.getLogger(__name__)
@@ -235,12 +235,63 @@ def _build_layer2_jit_rules(phase: GamePhase) -> str:
 _MAX_STATE_CHARS = 800
 
 
+async def _compile_graph_context(
+    session: AsyncSession,
+    session_id: str,
+    entity_names: dict[tuple[str, str], str],
+) -> str:
+    """Compile a compact relationship summary for scene entities.
+
+    Single batch query. Returns empty string if disabled or no results.
+    """
+    from app.config import settings
+    if not settings.graph_context_enabled or not entity_names:
+        return ""
+
+    entity_list = list(entity_names.keys())
+    source_conds = [
+        (Relationship.source_type == etype) & (Relationship.source_id == eid)
+        for etype, eid in entity_list
+    ]
+    target_conds = [
+        (Relationship.target_type == etype) & (Relationship.target_id == eid)
+        for etype, eid in entity_list
+    ]
+
+    q = (
+        select(Relationship)
+        .where(
+            Relationship.session_id == session_id,
+            Relationship.strength >= settings.graph_context_strength_threshold,
+            or_(*source_conds),
+            or_(*target_conds),
+        )
+        .order_by(Relationship.strength.desc())
+        .limit(settings.graph_context_max_relations)
+    )
+    result = await session.execute(q)
+    rels = result.scalars().all()
+    if not rels:
+        return ""
+
+    parts: list[str] = []
+    for r in rels:
+        src = entity_names.get((r.source_type, r.source_id))
+        tgt = entity_names.get((r.target_type, r.target_id))
+        if not src or not tgt:
+            continue
+        parts.append(f"{src} {r.relationship}({r.strength}) {tgt}")
+
+    return "Relations: " + " | ".join(parts) if parts else ""
+
+
 async def _build_layer3_state(
     session: AsyncSession,
     game_session: GameSession,
 ) -> str:
     """Query DB and build compact state summary."""
     parts: list[str] = ["CURRENT STATE:"]
+    entity_names: dict[tuple[str, str], str] = {}
 
     # World + Location
     loc_str = "unknown"
@@ -252,6 +303,7 @@ async def _build_layer3_state(
         loc = result.scalars().first()
         if loc:
             loc_str = f"{loc.name} ({loc.biome})"
+            entity_names[("location", loc.id)] = loc.name
             exits = json.loads(loc.exits) if loc.exits else {}
             if exits:
                 # exits is {direction: location_id} — resolve names
@@ -261,6 +313,8 @@ async def _build_layer3_state(
                         select(Location).where(Location.id.in_(loc_ids))
                     )
                     id_to_name = {l.id: l.name for l in result.scalars().all()}
+                    for lid, lname in id_to_name.items():
+                        entity_names[("location", lid)] = lname
                     exit_parts = []
                     for direction, lid in exits.items():
                         name = id_to_name.get(lid, "?")
@@ -282,6 +336,7 @@ async def _build_layer3_state(
     if chars:
         char_strs = []
         for c in chars:
+            entity_names[("character", c.id)] = c.name
             conditions = json.loads(c.conditions) if c.conditions else []
             cond_str = f" [{','.join(conditions)}]" if conditions else ""
             char_strs.append(
@@ -304,6 +359,8 @@ async def _build_layer3_state(
         )
         npcs = result.scalars().all()
         if npcs:
+            for n in npcs:
+                entity_names[("npc", n.id)] = n.name
             npcs_text = ", ".join(f"{n.name} ({n.disposition})" for n in npcs)
     parts.append(f"NPCs here: {npcs_text}")
 
@@ -327,16 +384,28 @@ async def _build_layer3_state(
     quests_text = ", ".join(q.title for q in quests) if quests else "(none)"
     parts.append(f"Active quests: {quests_text}")
 
+    # Graph relationships (Phase 3.4)
+    try:
+        relations_line = await _compile_graph_context(
+            session, game_session.id, entity_names,
+        )
+        if relations_line:
+            parts.append(relations_line)
+    except Exception:
+        pass  # Graph context is supplementary — never breaks prompt
+
     state_text = "\n".join(parts)
 
-    # Truncation: drop quests, then NPCs, then older party members
+    # Truncation cascade: relations → quests → NPCs → hard cut
     if len(state_text) > _MAX_STATE_CHARS:
-        # Drop quests line
+        parts = [p for p in parts if not p.startswith("Relations:")]
+        state_text = "\n".join(parts)
+
+    if len(state_text) > _MAX_STATE_CHARS:
         parts = [p for p in parts if not p.startswith("Active quests:")]
         state_text = "\n".join(parts)
 
     if len(state_text) > _MAX_STATE_CHARS:
-        # Drop NPCs line
         parts = [p for p in parts if not p.startswith("NPCs here:")]
         state_text = "\n".join(parts)
 

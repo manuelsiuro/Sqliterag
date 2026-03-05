@@ -6,8 +6,9 @@ import json
 from types import SimpleNamespace
 
 import pytest
+from sqlalchemy import select
 
-from app.models.rpg import Character, GameSession, Location, NPC, Quest
+from app.models.rpg import Character, GameSession, Location, NPC, Quest, Relationship
 from app.services.prompt_builder import (
     GamePhase,
     PromptResult,
@@ -19,6 +20,7 @@ from app.services.prompt_builder import (
     _build_layer2_jit_rules,
     _build_layer3_state,
     _build_layer4_format,
+    _compile_graph_context,
     build_rpg_system_prompt,
     detect_phase,
     extract_recent_tool_names,
@@ -480,3 +482,88 @@ class TestToolFiltering:
         assert len(get_phase_tool_names(GamePhase.COMBAT)) == 29
         assert len(get_phase_tool_names(GamePhase.EXPLORATION)) == 32
         assert len(get_phase_tool_names(GamePhase.SOCIAL)) == 24
+
+
+# --- Graph-to-context compiler (Phase 3.4) ---
+
+
+class TestGraphContext:
+    @pytest.fixture
+    async def game_with_rels(self, session):
+        """Game with characters, NPC, location, and a relationship."""
+        gs = GameSession(conversation_id="test-graph", world_name="Graphland")
+        session.add(gs)
+        await session.flush()
+
+        loc = Location(session_id=gs.id, name="Tavern", biome="town", exits="{}")
+        session.add(loc)
+        await session.flush()
+        gs.current_location_id = loc.id
+
+        char = Character(
+            session_id=gs.id, name="Arin", char_class="Fighter",
+            level=3, max_hp=28, current_hp=28, armor_class=16,
+        )
+        session.add(char)
+
+        npc = NPC(
+            session_id=gs.id, name="Grim", disposition="friendly",
+            location_id=loc.id,
+        )
+        session.add(npc)
+        await session.flush()
+
+        rel = Relationship(
+            session_id=gs.id,
+            source_type="npc", source_id=npc.id,
+            target_type="character", target_id=char.id,
+            relationship="knows", strength=70,
+        )
+        session.add(rel)
+        await session.flush()
+        return gs
+
+    @pytest.mark.asyncio
+    async def test_relations_in_state(self, session, game_with_rels):
+        text = await _build_layer3_state(session, game_with_rels)
+        assert "Relations:" in text
+        assert "Grim knows(70) Arin" in text
+
+    @pytest.mark.asyncio
+    async def test_low_strength_filtered(self, session, game_with_rels):
+        gs = game_with_rels
+        chars = (await session.execute(
+            select(Character).where(Character.session_id == gs.id)
+        )).scalars().all()
+        npcs = (await session.execute(
+            select(NPC).where(NPC.session_id == gs.id)
+        )).scalars().all()
+        weak = Relationship(
+            session_id=gs.id,
+            source_type="character", source_id=chars[0].id,
+            target_type="npc", target_id=npcs[0].id,
+            relationship="suspects", strength=10,
+        )
+        session.add(weak)
+        await session.flush()
+        text = await _build_layer3_state(session, gs)
+        assert "suspects" not in text
+
+    @pytest.mark.asyncio
+    async def test_no_rels_no_line(self, session):
+        gs = GameSession(conversation_id="test-no-rels", world_name="Empty")
+        session.add(gs)
+        await session.flush()
+        text = await _build_layer3_state(session, gs)
+        assert "Relations:" not in text
+
+    @pytest.mark.asyncio
+    async def test_disabled_via_config(self, session, game_with_rels):
+        from app.config import settings
+        orig = settings.graph_context_enabled
+        settings.graph_context_enabled = False
+        try:
+            text = await _build_layer3_state(session, game_with_rels)
+            assert "Relations:" not in text
+        finally:
+            settings.graph_context_enabled = orig

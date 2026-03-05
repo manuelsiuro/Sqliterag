@@ -92,6 +92,11 @@ class Settings(BaseSettings):
     # Auto-extract relationships from tool results (Phase 3.3)
     auto_extract_relationships: bool = True
 
+    # Graph-to-context compiler (Phase 3.4)
+    graph_context_enabled: bool = True
+    graph_context_strength_threshold: int = 30
+    graph_context_max_relations: int = 8
+
     # Server
     host: str = "0.0.0.0"
     port: int = 8000
