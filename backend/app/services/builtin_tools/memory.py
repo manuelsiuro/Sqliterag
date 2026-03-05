@@ -1,13 +1,28 @@
-"""Game memory management tools (Phase 10)."""
+"""Game memory management tools (Phase 10 + Phase 2.6 session summarization)."""
 
 from __future__ import annotations
 
 import json
+import logging
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.services.rpg_service import get_or_create_session
+
+logger = logging.getLogger(__name__)
+
+
+def _memory_to_event(m) -> dict:
+    """Convert a GameMemory row to a serializable event dict."""
+    return {
+        "content": m.content,
+        "memory_type": m.memory_type,
+        "importance": round((m.importance_score or 0.5) * 9 + 1),
+        "entities": json.loads(m.entity_names) if m.entity_names else [],
+        "created_at": m.created_at.isoformat() if m.created_at else None,
+    }
 
 
 async def archive_event(
@@ -87,15 +102,7 @@ async def search_memory(
     if memory_type:
         memories = [m for m in memories if m.memory_type == memory_type]
 
-    memory_list = []
-    for m in memories:
-        memory_list.append({
-            "content": m.content,
-            "importance": round((m.importance_score or 0.5) * 9 + 1),
-            "memory_type": m.memory_type,
-            "entities": json.loads(m.entity_names) if m.entity_names else [],
-            "created_at": m.created_at.isoformat() if m.created_at else None,
-        })
+    memory_list = [_memory_to_event(m) for m in memories]
 
     return json.dumps({
         "type": "memory_results",
@@ -110,11 +117,24 @@ async def get_session_summary(
     *,
     session: AsyncSession,
     conversation_id: str,
+    llm_service=None,
+    embedding_service=None,
 ) -> str:
-    """Get a summary of all archived memories for the current game session."""
+    """Get a narrative summary of the current game session."""
     from app.models.rpg import GameMemory
 
     gs = await get_or_create_session(session, conversation_id)
+
+    # If cached narrative exists, return it directly
+    if gs.session_summary:
+        return json.dumps({
+            "type": "session_summary",
+            "session_number": gs.session_number,
+            "events": [],
+            "count": 0,
+            "summary": gs.session_summary,
+            "narrative": True,
+        })
 
     result = await session.execute(
         select(GameMemory)
@@ -123,19 +143,44 @@ async def get_session_summary(
     )
     memories = result.scalars().all()
 
-    events = []
+    events = [_memory_to_event(m) for m in memories]
+
+    # Try LLM narrative generation on-demand
+    if memories and llm_service is not None and settings.session_summary_enabled:
+        try:
+            from app.services.summarization_service import generate_session_summary
+
+            logger.info("Generating LLM narrative for session %s (%d memories)", gs.id, len(memories))
+            narrative = await generate_session_summary(
+                session, gs, llm_service, settings.default_model,
+            )
+            if narrative:
+                # Cache on the game session
+                gs.session_summary = narrative
+                await session.flush()
+                logger.info("Narrative generated and cached (%d chars)", len(narrative))
+                return json.dumps({
+                    "type": "session_summary",
+                    "session_number": gs.session_number,
+                    "events": events,
+                    "count": len(events),
+                    "summary": narrative,
+                    "narrative": True,
+                })
+            else:
+                logger.warning("LLM narrative returned empty, falling back to programmatic summary")
+        except Exception:
+            logger.warning("LLM narrative generation failed", exc_info=True)
+    elif not memories:
+        logger.info("get_session_summary: no memories to summarize")
+    elif llm_service is None:
+        logger.info("get_session_summary: llm_service is None, using programmatic fallback")
+
+    # Programmatic fallback
     type_counts: dict[str, int] = {}
     for m in memories:
         type_counts[m.memory_type] = type_counts.get(m.memory_type, 0) + 1
-        events.append({
-            "content": m.content,
-            "memory_type": m.memory_type,
-            "importance": round((m.importance_score or 0.5) * 9 + 1),
-            "entities": json.loads(m.entity_names) if m.entity_names else [],
-            "created_at": m.created_at.isoformat() if m.created_at else None,
-        })
 
-    # Build programmatic summary
     if events:
         first = events[0].get("created_at", "?")
         last = events[-1].get("created_at", "?")
@@ -146,8 +191,86 @@ async def get_session_summary(
 
     return json.dumps({
         "type": "session_summary",
-        "session_number": session_number,
+        "session_number": gs.session_number,
         "events": events,
         "count": len(events),
         "summary": summary,
+        "narrative": False,
+    })
+
+
+async def end_session(
+    summary_override: str = "",
+    *,
+    session: AsyncSession,
+    conversation_id: str,
+    llm_service=None,
+    embedding_service=None,
+) -> str:
+    """End the current game session with a narrative summary."""
+    from app.services import memory_service
+
+    gs = await get_or_create_session(session, conversation_id)
+
+    if gs.status == "ended":
+        return json.dumps({
+            "type": "session_ended",
+            "error": "Session has already been ended.",
+        })
+
+    # Generate summary
+    summary_text = ""
+    if summary_override:
+        summary_text = summary_override
+    elif llm_service is not None and settings.session_summary_enabled:
+        try:
+            from app.services.summarization_service import generate_session_summary
+
+            logger.info("end_session: generating LLM narrative for session %s", gs.id)
+            summary_text = await generate_session_summary(
+                session, gs, llm_service, settings.default_model,
+            )
+            logger.info("end_session: narrative generated (%d chars)", len(summary_text))
+        except Exception:
+            logger.warning("end_session: LLM narrative generation failed", exc_info=True)
+    elif llm_service is None:
+        logger.info("end_session: llm_service is None, using programmatic fallback")
+
+    if not summary_text:
+        # Programmatic fallback
+        from app.models.rpg import GameMemory
+        result = await session.execute(
+            select(GameMemory)
+            .where(GameMemory.session_id == gs.id)
+            .order_by(GameMemory.created_at.asc())
+        )
+        memories = result.scalars().all()
+        if memories:
+            summary_text = f"Session ended with {len(memories)} recorded events in {gs.world_name}."
+        else:
+            summary_text = f"Session ended in {gs.world_name}. No events were recorded."
+
+    # Update session state
+    gs.status = "ended"
+    gs.session_summary = summary_text
+    await session.flush()
+
+    # Archive summary as a searchable GameMemory
+    await memory_service.create_memory(
+        session,
+        session_id=gs.id,
+        memory_type="summary",
+        entity_type="session_summary",
+        content=summary_text,
+        entity_names=[gs.world_name],
+        importance_score=0.9,
+        embedding_service=embedding_service,
+    )
+
+    return json.dumps({
+        "type": "session_ended",
+        "session_number": gs.session_number,
+        "world_name": gs.world_name,
+        "summary": summary_text,
+        "status": "ended",
     })

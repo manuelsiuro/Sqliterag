@@ -52,7 +52,7 @@ from app.services.builtin_tools.quests import (
     update_quest_objective,
 )
 from app.services.builtin_tools.rest import long_rest, short_rest
-from app.services.builtin_tools.memory import archive_event, get_session_summary, search_memory
+from app.services.builtin_tools.memory import archive_event, end_session, get_session_summary, search_memory
 from app.services.builtin_tools.session import get_game_state, init_game_session
 from app.services.builtin_tools.world import (
     connect_locations,
@@ -118,4 +118,5 @@ BUILTIN_REGISTRY: dict[str, callable] = {
     "archive_event": archive_event,
     "search_memory": search_memory,
     "get_session_summary": get_session_summary,
+    "end_session": end_session,
 }

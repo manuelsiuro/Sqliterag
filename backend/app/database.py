@@ -123,6 +123,7 @@ async def init_db() -> None:
             pass
 
         await _migrate_messages_table(conn)
+        await _migrate_game_sessions_table(conn)
 
     # If fts_memories is empty but game_memories has rows, rebuild the FTS index
     await _sync_fts_on_startup()
@@ -130,6 +131,23 @@ async def init_db() -> None:
 
     await seed_builtin_tools()
     logger.info("Database initialized")
+
+
+async def _migrate_game_sessions_table(conn) -> None:
+    """Add columns introduced in Phase 2.6 (idempotent)."""
+    columns_to_add = [
+        ("session_number", "INTEGER DEFAULT 1"),
+        ("status", "VARCHAR(20) DEFAULT 'active'"),
+        ("session_summary", "TEXT"),
+    ]
+    for col_name, col_type in columns_to_add:
+        try:
+            await conn.execute(
+                text(f"ALTER TABLE rpg_game_sessions ADD COLUMN {col_name} {col_type}")
+            )
+            logger.info("Added column rpg_game_sessions.%s", col_name)
+        except Exception:
+            pass  # Column already exists
 
 
 async def _migrate_messages_table(conn) -> None:
@@ -645,12 +663,20 @@ def _builtin_tool_defs() -> dict[str, dict]:
             "execution_config": _config("search_memory"),
         },
         "get_session_summary": {
-            "description": "Get a chronological summary of all archived memories for the current game session.",
+            "description": "Get a narrative summary of the current game session. Returns an LLM-generated narrative if available, or generates one on demand.",
             "parameters_schema": _schema([], {
                 "session_number": {"type": "integer", "description": "Session number to summarize (default: current session)."},
             }),
             "execution_type": "builtin",
             "execution_config": _config("get_session_summary"),
+        },
+        "end_session": {
+            "description": "End the current game session. Generates a narrative summary of the session, archives it to memory, and marks the session as ended.",
+            "parameters_schema": _schema([], {
+                "summary_override": {"type": "string", "description": "Optional custom summary text. If provided, skips LLM generation."},
+            }),
+            "execution_type": "builtin",
+            "execution_config": _config("end_session"),
         },
     }
 

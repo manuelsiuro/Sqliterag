@@ -31,6 +31,16 @@ interface SessionSummaryData {
   events: MemoryEntry[];
   count: number;
   summary: string;
+  narrative?: boolean;
+  error?: string;
+}
+
+interface SessionEndedData {
+  type: "session_ended";
+  session_number: number;
+  world_name?: string;
+  summary: string;
+  status: string;
   error?: string;
 }
 
@@ -140,11 +150,20 @@ function SummaryView({ d }: { d: SessionSummaryData }) {
   return (
     <div className="bg-gray-800/30 rounded-lg px-3 py-2.5 border border-gray-700/30 space-y-2">
       <div className="flex items-center gap-2">
-        <span className="text-base">📋</span>
+        <span className="text-base">{d.narrative ? "📜" : "📋"}</span>
         <span className="text-sm font-medium text-gray-200">Session Summary</span>
-        <span className="text-xs text-gray-500">({d.count} memor{d.count !== 1 ? "ies" : "y"})</span>
+        {d.narrative && (
+          <span className="text-xs px-1.5 py-0.5 rounded border bg-amber-900/40 text-amber-300 border-amber-700/40">
+            narrative
+          </span>
+        )}
+        {d.count > 0 && (
+          <span className="text-xs text-gray-500">({d.count} memor{d.count !== 1 ? "ies" : "y"})</span>
+        )}
       </div>
-      <p className="text-xs text-gray-400">{d.summary}</p>
+      <p className={`text-sm ${d.narrative ? "text-gray-200 italic" : "text-gray-400"}`}>
+        {d.summary}
+      </p>
       {d.events.length > 0 && (
         <div className="space-y-1.5">
           {d.events.map((entry, i) => (
@@ -156,8 +175,26 @@ function SummaryView({ d }: { d: SessionSummaryData }) {
   );
 }
 
-export function MemoryRenderer({ raw }: ToolRendererProps) {
-  const d = raw as MemoryArchivedData | MemoryResultsData | SessionSummaryData;
+function EndedView({ d }: { d: SessionEndedData }) {
+  return (
+    <div className="bg-gray-800/30 rounded-lg px-3 py-2.5 border border-amber-700/30 space-y-2">
+      <div className="flex items-center gap-2">
+        <span className="text-base">📖</span>
+        <span className="text-sm font-medium text-amber-200">Session Ended</span>
+        {d.session_number && (
+          <span className="text-xs text-gray-400">#{d.session_number}</span>
+        )}
+        {d.world_name && (
+          <span className="text-xs text-gray-500">{d.world_name}</span>
+        )}
+      </div>
+      <p className="text-sm text-gray-200 italic">{d.summary}</p>
+    </div>
+  );
+}
+
+export function MemoryRenderer({ data }: ToolRendererProps) {
+  const d = data as MemoryArchivedData | MemoryResultsData | SessionSummaryData | SessionEndedData;
 
   if (d.error) {
     return <div className="mt-2 text-red-400 text-sm">{d.error}</div>;
@@ -170,6 +207,8 @@ export function MemoryRenderer({ raw }: ToolRendererProps) {
       return <ResultsView d={d as MemoryResultsData} />;
     case "session_summary":
       return <SummaryView d={d as SessionSummaryData} />;
+    case "session_ended":
+      return <EndedView d={d as SessionEndedData} />;
     default:
       return null;
   }

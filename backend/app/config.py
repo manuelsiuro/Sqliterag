@@ -63,6 +63,10 @@ class Settings(BaseSettings):
     memory_search_top_k: int = 5
     memory_search_candidates_k: int = 20
 
+    # Session summarization (Phase 2.6)
+    session_summary_enabled: bool = True
+    session_summary_max_tokens: int = 300
+
     # Stanford retrieval scoring (Phase 2.4)
     memory_stanford_scoring_enabled: bool = True
     memory_alpha_recency: float = 1.0

@@ -25,6 +25,9 @@ class GameSession(Base):
     current_location_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     environment: Mapped[str] = mapped_column(Text, default='{"time_of_day":"day","weather":"clear","season":"summer"}')
     combat_state: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON blob when in combat
+    session_number: Mapped[int] = mapped_column(Integer, default=1)
+    status: Mapped[str] = mapped_column(String(20), default="active")  # active | ended
+    session_summary: Mapped[str | None] = mapped_column(Text, nullable=True)  # LLM narrative
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
     characters: Mapped[list[Character]] = relationship(back_populates="game_session", cascade="all, delete-orphan")

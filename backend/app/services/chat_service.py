@@ -345,6 +345,7 @@ class ChatService:
                                     session=session,
                                     conversation_id=conversation_id,
                                     embedding_service=self.embedding_service,
+                                    llm_service=self.llm_service,
                                 )
                         else:
                             tool_name = raw_name
@@ -356,6 +357,7 @@ class ChatService:
                                     session=session,
                                     conversation_id=conversation_id,
                                     embedding_service=self.embedding_service,
+                                    llm_service=self.llm_service,
                                 )
                             else:
                                 tool_result = f"[Unknown tool: {tool_name}]"
