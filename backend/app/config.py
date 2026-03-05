@@ -86,6 +86,9 @@ class Settings(BaseSettings):
     memgpt_recall_importance: float = 0.6
     memgpt_max_recall_tokens: int = 400
 
+    # Knowledge graph (Phase 3.1)
+    knowledge_graph_enabled: bool = True
+
     # Server
     host: str = "0.0.0.0"
     port: int = 8000

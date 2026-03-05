@@ -11,6 +11,7 @@ from app.models.rpg import (
     Location,
     NPC,
     Quest,
+    Relationship,
 )
 from app.models.setting import Setting
 from app.models.tool import ConversationTool, Tool
@@ -30,6 +31,7 @@ __all__ = [
     "Message",
     "NPC",
     "Quest",
+    "Relationship",
     "Setting",
     "Tool",
 ]

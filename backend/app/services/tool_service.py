@@ -24,6 +24,9 @@ _ARGUMENT_ALIASES: dict[str, dict[str, str]] = {
     "talk_to_npc": {"name": "npc_name"},
     "npc_remember": {"name": "npc_name"},
     "update_npc_relationship": {"name": "npc_name"},
+    "add_relationship": {"source": "source_name", "target": "target_name", "type": "relationship", "rel_type": "relationship"},
+    "query_relationships": {"name": "entity_name", "type": "entity_type"},
+    "get_entity_relationships": {"name": "entity_name", "type": "entity_type"},
 }
 
 

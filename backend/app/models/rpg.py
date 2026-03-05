@@ -35,6 +35,7 @@ class GameSession(Base):
     npcs: Mapped[list[NPC]] = relationship(back_populates="game_session", cascade="all, delete-orphan")
     quests: Mapped[list[Quest]] = relationship(back_populates="game_session", cascade="all, delete-orphan")
     memories: Mapped[list[GameMemory]] = relationship(back_populates="game_session", cascade="all, delete-orphan")
+    relationships: Mapped[list[Relationship]] = relationship(back_populates="game_session", cascade="all, delete-orphan")
 
 
 # ---------------------------------------------------------------------------
@@ -187,3 +188,27 @@ class GameMemory(Base):
     last_accessed: Mapped[datetime] = mapped_column(server_default=func.now())
 
     game_session: Mapped[GameSession] = relationship(back_populates="memories")
+
+
+# ---------------------------------------------------------------------------
+# Relationship — Knowledge Graph edges (Phase 3.1)
+# ---------------------------------------------------------------------------
+class Relationship(Base):
+    __tablename__ = "rpg_relationships"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    session_id: Mapped[str] = mapped_column(String(36), ForeignKey("rpg_game_sessions.id", ondelete="CASCADE"))
+    source_type: Mapped[str] = mapped_column(String(20))    # character | npc | location | quest | item
+    source_id: Mapped[str] = mapped_column(String(36))
+    target_type: Mapped[str] = mapped_column(String(20))
+    target_id: Mapped[str] = mapped_column(String(36))
+
+    # ORM relationship must be declared before the 'relationship' column to avoid
+    # shadowing sqlalchemy.orm.relationship()
+    game_session: Mapped[GameSession] = relationship(back_populates="relationships")
+
+    relationship: Mapped[str] = mapped_column(String(50))    # knows_about, allied_with, enemy_of, etc.
+    strength: Mapped[int] = mapped_column(Integer, default=50)  # 0-100
+    detail: Mapped[str] = mapped_column(Text, default="{}")  # JSON extra context
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(server_default=func.now())

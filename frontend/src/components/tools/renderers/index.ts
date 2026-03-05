@@ -82,3 +82,8 @@ registerToolRenderer("memory_results", MemoryRenderer);
 registerToolRenderer("recall_results", MemoryRenderer);
 registerToolRenderer("session_summary", MemoryRenderer);
 registerToolRenderer("session_ended", MemoryRenderer);
+
+// Phase 11 — Knowledge Graph
+import { RelationshipRenderer } from "./RelationshipRenderer";
+registerToolRenderer("relationship_added", RelationshipRenderer);
+registerToolRenderer("relationship_graph", RelationshipRenderer);

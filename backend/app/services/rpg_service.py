@@ -9,7 +9,7 @@ import random
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.rpg import Character, GameSession, Location
+from app.models.rpg import Character, GameSession, Item, Location, NPC, Quest
 
 logger = logging.getLogger(__name__)
 
@@ -206,3 +206,52 @@ async def get_location_by_name(db: AsyncSession, session_id: str, name: str) -> 
         )
     )
     return result.scalars().first()
+
+
+async def get_npc_by_name(db: AsyncSession, session_id: str, name: str) -> NPC | None:
+    result = await db.execute(
+        select(NPC).where(NPC.session_id == session_id, NPC.name.ilike(name))
+    )
+    return result.scalars().first()
+
+
+async def get_quest_by_title(db: AsyncSession, session_id: str, title: str) -> Quest | None:
+    result = await db.execute(
+        select(Quest).where(Quest.session_id == session_id, Quest.title.ilike(title))
+    )
+    return result.scalars().first()
+
+
+async def resolve_entity(db: AsyncSession, session_id: str, entity_type: str, name: str) -> tuple[str, str | None]:
+    """Resolve entity name -> (type, id). Returns (type, None) if not found."""
+    if entity_type == "character":
+        e = await get_character_by_name(db, session_id, name)
+    elif entity_type == "npc":
+        e = await get_npc_by_name(db, session_id, name)
+    elif entity_type == "location":
+        e = await get_location_by_name(db, session_id, name)
+    elif entity_type == "quest":
+        e = await get_quest_by_title(db, session_id, name)
+    elif entity_type == "item":
+        result = await db.execute(select(Item).where(Item.name.ilike(name)))
+        e = result.scalars().first()
+    else:
+        return (entity_type, None)
+    return (entity_type, e.id if e else None)
+
+
+async def resolve_entity_name(db: AsyncSession, entity_type: str, entity_id: str) -> str:
+    """Reverse lookup: entity ID -> display name."""
+    model_map = {
+        "character": (Character, "name"),
+        "npc": (NPC, "name"),
+        "location": (Location, "name"),
+        "quest": (Quest, "title"),
+        "item": (Item, "name"),
+    }
+    entry = model_map.get(entity_type)
+    if not entry:
+        return entity_id
+    model_cls, name_col = entry
+    result = await db.execute(select(getattr(model_cls, name_col)).where(model_cls.id == entity_id))
+    return result.scalar() or entity_id

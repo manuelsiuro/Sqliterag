@@ -51,6 +51,11 @@ from app.services.builtin_tools.quests import (
     get_quest_journal,
     update_quest_objective,
 )
+from app.services.builtin_tools.relationships import (
+    add_relationship,
+    get_entity_relationships,
+    query_relationships,
+)
 from app.services.builtin_tools.rest import long_rest, short_rest
 from app.services.builtin_tools.memory import archive_event, end_session, get_session_summary, recall_context, search_memory
 from app.services.builtin_tools.session import get_game_state, init_game_session
@@ -120,4 +125,8 @@ BUILTIN_REGISTRY: dict[str, callable] = {
     "recall_context": recall_context,
     "get_session_summary": get_session_summary,
     "end_session": end_session,
+    # Phase 11 — Knowledge Graph
+    "add_relationship": add_relationship,
+    "query_relationships": query_relationships,
+    "get_entity_relationships": get_entity_relationships,
 }

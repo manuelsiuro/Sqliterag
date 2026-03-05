@@ -43,6 +43,8 @@ RPG_TOOL_NAMES = {
     "init_game_session", "get_game_state",
     # Memory
     "archive_event", "search_memory", "recall_context", "get_session_summary", "end_session",
+    # Knowledge Graph
+    "add_relationship", "query_relationships", "get_entity_relationships",
 }
 
 # Static fallback — identical to the old RPG_SYSTEM_PROMPT
@@ -121,6 +123,8 @@ _CORE_TOOLS: frozenset[str] = frozenset({
     "create_quest", "update_quest_objective", "complete_quest", "get_quest_journal",
     # Memory
     "archive_event", "search_memory", "recall_context", "get_session_summary", "end_session",
+    # Knowledge Graph (read)
+    "query_relationships", "get_entity_relationships",
 })
 
 _PHASE_TOOLS: dict[GamePhase, frozenset[str]] = {
@@ -136,12 +140,14 @@ _PHASE_TOOLS: dict[GamePhase, frozenset[str]] = {
         "create_item", "give_item", "equip_item", "unequip_item", "get_inventory", "transfer_item",
         "short_rest", "long_rest",
         "start_combat",
+        "add_relationship",
     }),
     GamePhase.SOCIAL: frozenset({
         "create_npc", "talk_to_npc", "update_npc_relationship", "npc_remember",
         "look_around", "move_to",
         "get_inventory", "give_item", "transfer_item",
         "start_combat",
+        "add_relationship",
     }),
 }
 

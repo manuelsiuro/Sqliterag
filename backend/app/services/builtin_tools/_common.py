@@ -22,7 +22,11 @@ from app.services.rpg_service import (
     generate_world_name,
     get_character_by_name,
     get_location_by_name,
+    get_npc_by_name,
     get_or_create_session,
+    get_quest_by_title,
     is_generic_name,
     level_for_xp,
+    resolve_entity,
+    resolve_entity_name,
 )

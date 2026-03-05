@@ -129,6 +129,19 @@ async def init_db() -> None:
             except Exception:
                 pass
 
+        # Indexes for knowledge graph (Phase 3.1)
+        for idx_name, idx_cols in [
+            ("idx_rel_source", "session_id, source_type, source_id"),
+            ("idx_rel_target", "session_id, target_type, target_id"),
+            ("idx_rel_type", "session_id, relationship"),
+        ]:
+            try:
+                await conn.execute(text(
+                    f"CREATE INDEX IF NOT EXISTS {idx_name} ON rpg_relationships({idx_cols})"
+                ))
+            except Exception:
+                pass
+
         # Drop orphaned rpg_chronicle table (superseded by game_memories)
         try:
             await conn.execute(text("DROP TABLE IF EXISTS rpg_chronicle"))
@@ -700,6 +713,41 @@ def _builtin_tool_defs() -> dict[str, dict]:
             }),
             "execution_type": "builtin",
             "execution_config": _config("end_session"),
+        },
+
+        # ── Phase 11: Knowledge Graph ───────────────────────────
+        "add_relationship": {
+            "description": "Create or update a relationship between two game entities (characters, NPCs, locations, quests, items). Tracks social bonds, spatial connections, quest involvement, ownership, and knowledge.",
+            "parameters_schema": _schema(["source_name", "source_type", "target_name", "target_type", "relationship"], {
+                "source_name": {"type": "string", "description": "Name of the source entity"},
+                "source_type": {"type": "string", "description": "Type: character, npc, location, quest, or item"},
+                "target_name": {"type": "string", "description": "Name of the target entity"},
+                "target_type": {"type": "string", "description": "Type: character, npc, location, quest, or item"},
+                "relationship": {"type": "string", "description": "Relationship: knows_about, allied_with, enemy_of, fears, trusts, located_at, quest_giver, owns, guards, seeks, etc."},
+                "strength": {"type": "integer", "description": "Strength 0-100 (default 50). 0=weak, 100=defining"},
+            }),
+            "execution_type": "builtin",
+            "execution_config": _config("add_relationship"),
+        },
+        "query_relationships": {
+            "description": "Query the relationship graph for an entity. Returns connections and optionally 2-hop neighbors. Use to understand who knows what and how entities relate.",
+            "parameters_schema": _schema(["entity_name"], {
+                "entity_name": {"type": "string", "description": "Name of the entity to query"},
+                "entity_type": {"type": "string", "description": "Type: character, npc, location, quest, item. Auto-detected if empty."},
+                "relationship_filter": {"type": "string", "description": "Filter by relationship type. Empty for all."},
+                "depth": {"type": "integer", "description": "Traversal depth: 1=direct, 2=two-hop. Default 1."},
+            }),
+            "execution_type": "builtin",
+            "execution_config": _config("query_relationships"),
+        },
+        "get_entity_relationships": {
+            "description": "Get a compact summary of an entity's direct relationships. Simpler than query_relationships.",
+            "parameters_schema": _schema(["entity_name"], {
+                "entity_name": {"type": "string", "description": "Name of the entity"},
+                "entity_type": {"type": "string", "description": "Type: character, npc, location, quest, item. Auto-detected if empty."},
+            }),
+            "execution_type": "builtin",
+            "execution_config": _config("get_entity_relationships"),
         },
     }
 
