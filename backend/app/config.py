@@ -74,6 +74,10 @@ class Settings(BaseSettings):
     memory_alpha_relevance: float = 1.0
     memory_recency_decay: float = 0.995
 
+    # Metadata-enhanced retrieval (Phase 2.7)
+    memory_prefilter_enabled: bool = True
+    memory_vec_overfetch_factor: float = 2.0
+
     # Server
     host: str = "0.0.0.0"
     port: int = 8000

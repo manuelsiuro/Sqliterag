@@ -25,6 +25,7 @@ from app.services.token_utils import (
     truncate_history,
 )
 from app.services.prompt_builder import (
+    GamePhase,
     RPG_TOOL_NAMES,
     build_rpg_system_prompt,
     extract_recent_tool_names,
@@ -32,6 +33,13 @@ from app.services.prompt_builder import (
 )
 from app.services.tool_service import ToolService
 from app.services.tool_validation import validate_tool_call
+
+# Phase-aware memory type preferences for auto-injection (Phase 2.7)
+_PHASE_MEMORY_TYPES: dict[GamePhase, list[str]] = {
+    GamePhase.COMBAT: ["episodic", "procedural"],
+    GamePhase.SOCIAL: ["episodic", "semantic"],
+    GamePhase.EXPLORATION: ["episodic", "semantic"],
+}
 
 logger = logging.getLogger(__name__)
 
@@ -215,10 +223,14 @@ class ChatService:
                 from app.services.memory_service import search_with_stanford_scoring, get_memories_by_ids
 
                 game_session = await get_game_session(session, conversation_id)
+                preferred_types = None
+                if settings.memory_prefilter_enabled and phase is not None:
+                    preferred_types = _PHASE_MEMORY_TYPES.get(phase)
                 memory_results = await search_with_stanford_scoring(
                     session, user_message,
                     embedding_service=self.embedding_service,
                     session_id=game_session.id,
+                    memory_types=preferred_types,
                 )
                 if memory_results:
                     memory_ids = [mid for mid, _score in memory_results]

@@ -116,6 +116,19 @@ async def init_db() -> None:
                 exc_info=True,
             )
 
+        # Indexes for metadata-enhanced retrieval (Phase 2.7)
+        for idx_name, idx_col in [
+            ("idx_game_memories_memory_type", "memory_type"),
+            ("idx_game_memories_entity_type", "entity_type"),
+            ("idx_game_memories_session_number", "session_number"),
+        ]:
+            try:
+                await conn.execute(text(
+                    f"CREATE INDEX IF NOT EXISTS {idx_name} ON game_memories({idx_col})"
+                ))
+            except Exception:
+                pass
+
         # Drop orphaned rpg_chronicle table (superseded by game_memories)
         try:
             await conn.execute(text("DROP TABLE IF EXISTS rpg_chronicle"))
@@ -654,10 +667,12 @@ def _builtin_tool_defs() -> dict[str, dict]:
             "execution_config": _config("archive_event"),
         },
         "search_memory": {
-            "description": "Search long-term game memory for past events, facts, or knowledge relevant to a query.",
+            "description": "Search long-term game memory for past events, facts, or knowledge. Supports filtering by memory type, entity type, and session range.",
             "parameters_schema": _schema(["query"], {
                 "query": {"type": "string", "description": "Search query describing what to recall."},
-                "memory_type": {"type": "string", "description": "Filter by memory type: episodic, semantic, procedural. Leave empty for all."},
+                "memory_type": {"type": "string", "description": "Filter by memory type: episodic, semantic, procedural, summary. Comma-separated for multiple. Empty for all."},
+                "entity_type": {"type": "string", "description": "Filter by entity type: character, location, npc, quest, item, event. Comma-separated for multiple. Empty for all."},
+                "session_range": {"type": "string", "description": "Filter by session number: 'N' for single session, 'N-M' for range. Empty for all."},
             }),
             "execution_type": "builtin",
             "execution_config": _config("search_memory"),

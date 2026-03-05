@@ -70,21 +70,46 @@ async def archive_event(
 async def search_memory(
     query: str,
     memory_type: str = "",
+    entity_type: str = "",
+    session_range: str = "",
     *,
     session: AsyncSession,
     conversation_id: str,
     embedding_service=None,
 ) -> str:
-    """Search long-term game memory using hybrid retrieval."""
+    """Search long-term game memory using hybrid retrieval with metadata pre-filters."""
     from app.services import memory_service
 
     gs = await get_or_create_session(session, conversation_id)
+
+    # Parse comma-separated strings into lists
+    memory_types = [t.strip() for t in memory_type.split(",") if t.strip()] or None
+    entity_types = [t.strip() for t in entity_type.split(",") if t.strip()] or None
+
+    # Parse session range: "N" -> (N, N), "N-M" -> (N, M)
+    parsed_range = None
+    if session_range and session_range.strip():
+        sr = session_range.strip()
+        if "-" in sr:
+            parts = sr.split("-", 1)
+            try:
+                parsed_range = (int(parts[0].strip()), int(parts[1].strip()))
+            except ValueError:
+                pass
+        else:
+            try:
+                parsed_range = (int(sr), int(sr))
+            except ValueError:
+                pass
 
     results = await memory_service.search_with_stanford_scoring(
         session,
         query,
         embedding_service=embedding_service,
         session_id=gs.id,
+        memory_types=memory_types,
+        entity_types=entity_types,
+        session_range=parsed_range,
     )
 
     if not results:
@@ -97,10 +122,6 @@ async def search_memory(
 
     memory_ids = [mid for mid, _score in results]
     memories = await memory_service.get_memories_by_ids(session, memory_ids)
-
-    # Filter by memory_type if specified
-    if memory_type:
-        memories = [m for m in memories if m.memory_type == memory_type]
 
     memory_list = [_memory_to_event(m) for m in memories]
 

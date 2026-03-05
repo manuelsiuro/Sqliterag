@@ -262,45 +262,54 @@ async def search_fts(
     query: str,
     *,
     session_id: str | None = None,
+    memory_types: list[str] | None = None,
+    entity_types: list[str] | None = None,
+    session_range: tuple[int, int] | None = None,
     k: int = 10,
 ) -> list[tuple[str, float]]:
     """FTS5 MATCH query returning (memory_id, score) pairs.
 
     Score is negated BM25 rank so higher = better match, consistent with
-    RRF expectations.
+    RRF expectations.  Metadata filters are applied as SQL pre-filters via
+    a JOIN with game_memories when any filter is active.
     """
     sanitized = _sanitize_fts_query(query)
     if not sanitized:
         return []
 
     try:
+        where_parts = ["fts_memories MATCH :query"]
+        params: dict = {"query": sanitized, "k": k}
+        needs_join = bool(session_id or memory_types or entity_types or session_range)
+
         if session_id:
-            rows = (
-                await session.execute(
-                    text(
-                        "SELECT f.memory_id, -f.rank AS score "
-                        "FROM fts_memories f "
-                        "JOIN game_memories g ON g.id = f.memory_id "
-                        "WHERE fts_memories MATCH :query AND g.session_id = :sid "
-                        "ORDER BY f.rank "
-                        "LIMIT :k"
-                    ),
-                    {"query": sanitized, "sid": session_id, "k": k},
-                )
-            ).fetchall()
-        else:
-            rows = (
-                await session.execute(
-                    text(
-                        "SELECT f.memory_id, -f.rank AS score "
-                        "FROM fts_memories f "
-                        "WHERE fts_memories MATCH :query "
-                        "ORDER BY f.rank "
-                        "LIMIT :k"
-                    ),
-                    {"query": sanitized, "k": k},
-                )
-            ).fetchall()
+            where_parts.append("g.session_id = :sid")
+            params["sid"] = session_id
+        if memory_types:
+            ph = ", ".join(f":mt{i}" for i in range(len(memory_types)))
+            where_parts.append(f"g.memory_type IN ({ph})")
+            for i, mt in enumerate(memory_types):
+                params[f"mt{i}"] = mt
+        if entity_types:
+            ph = ", ".join(f":et{i}" for i in range(len(entity_types)))
+            where_parts.append(f"g.entity_type IN ({ph})")
+            for i, et in enumerate(entity_types):
+                params[f"et{i}"] = et
+        if session_range:
+            where_parts.append("g.session_number >= :sn_min AND g.session_number <= :sn_max")
+            params["sn_min"] = session_range[0]
+            params["sn_max"] = session_range[1]
+
+        where_clause = " AND ".join(where_parts)
+        join_clause = "JOIN game_memories g ON g.id = f.memory_id " if needs_join else ""
+
+        sql = (
+            f"SELECT f.memory_id, -f.rank AS score "
+            f"FROM fts_memories f {join_clause}"
+            f"WHERE {where_clause} "
+            f"ORDER BY f.rank LIMIT :k"
+        )
+        rows = (await session.execute(text(sql), params)).fetchall()
         return [(row[0], float(row[1])) for row in rows]
     except Exception:
         logger.warning("FTS search failed for query %r", query, exc_info=True)
@@ -313,11 +322,16 @@ async def search_vec(
     *,
     embedding_service: BaseEmbeddingService,
     session_id: str | None = None,
+    memory_types: list[str] | None = None,
+    entity_types: list[str] | None = None,
+    session_range: tuple[int, int] | None = None,
     k: int = 20,
 ) -> list[tuple[str, int]]:
     """Vector similarity search returning (memory_id, rank_position) pairs.
 
     rank_position is 1-based (sorted by distance ascending = most similar first).
+    When metadata filters are active, over-fetches from vec0 then filters during
+    rowid resolution (sqlite-vec cannot pre-filter).
     """
     try:
         embedding = await embedding_service.generate_embedding(
@@ -325,8 +339,11 @@ async def search_vec(
         )
         vec_bytes = _serialize_float32(embedding)
 
+        # Over-fetch when metadata filters are active
+        has_filters = bool(session_id or memory_types or entity_types or session_range)
+        vec_k = int(k * settings.memory_vec_overfetch_factor) if has_filters else k
+
         # sqlite-vec requires LIMIT directly on the vec0 query (no JOINs)
-        # So we query vec_memories first, then resolve memory_ids via vec_memory_map
         vec_rows = (
             await session.execute(
                 text(
@@ -336,7 +353,7 @@ async def search_vec(
                     "ORDER BY distance "
                     "LIMIT :k"
                 ),
-                {"query": vec_bytes, "k": k},
+                {"query": vec_bytes, "k": vec_k},
             )
         ).fetchall()
 
@@ -356,34 +373,47 @@ async def search_vec(
         ).fetchall()
         rowid_to_mid = {r[0]: r[1] for r in map_rows}
 
-        if session_id:
-            # Filter by session_id
-            mid_list = list(rowid_to_mid.values())
-            mid_placeholders = ", ".join(f"'{m}'" for m in mid_list)
-            session_mids = set(
-                r[0] for r in (
-                    await session.execute(
-                        text(
-                            f"SELECT id FROM game_memories "
-                            f"WHERE id IN ({mid_placeholders}) AND session_id = :sid"
-                        ),
-                        {"sid": session_id},
-                    )
-                ).fetchall()
-            )
-            rows = [
-                (rowid_to_mid[r[0]], rank + 1)
-                for rank, r in enumerate(vec_rows)
-                if r[0] in rowid_to_mid and rowid_to_mid[r[0]] in session_mids
-            ]
-        else:
-            rows = [
-                (rowid_to_mid[r[0]], rank + 1)
-                for rank, r in enumerate(vec_rows)
-                if r[0] in rowid_to_mid
-            ]
+        # Build unified filter query for metadata constraints
+        mid_list = list(rowid_to_mid.values())
+        if not mid_list:
+            return []
 
-        return rows
+        where_parts = ["id IN ({})".format(", ".join(f"'{m}'" for m in mid_list))]
+        filter_params: dict = {}
+
+        if session_id:
+            where_parts.append("session_id = :sid")
+            filter_params["sid"] = session_id
+        if memory_types:
+            ph = ", ".join(f":mt{i}" for i in range(len(memory_types)))
+            where_parts.append(f"memory_type IN ({ph})")
+            for i, mt in enumerate(memory_types):
+                filter_params[f"mt{i}"] = mt
+        if entity_types:
+            ph = ", ".join(f":et{i}" for i in range(len(entity_types)))
+            where_parts.append(f"entity_type IN ({ph})")
+            for i, et in enumerate(entity_types):
+                filter_params[f"et{i}"] = et
+        if session_range:
+            where_parts.append("session_number >= :sn_min AND session_number <= :sn_max")
+            filter_params["sn_min"] = session_range[0]
+            filter_params["sn_max"] = session_range[1]
+
+        where_clause = " AND ".join(where_parts)
+        valid_mids = set(
+            r[0] for r in (
+                await session.execute(
+                    text(f"SELECT id FROM game_memories WHERE {where_clause}"),
+                    filter_params,
+                )
+            ).fetchall()
+        )
+
+        return [
+            (rowid_to_mid[r[0]], rank + 1)
+            for rank, r in enumerate(vec_rows)
+            if r[0] in rowid_to_mid and rowid_to_mid[r[0]] in valid_mids
+        ]
     except Exception:
         logger.warning("Vec search failed for query %r", query, exc_info=True)
         return []
@@ -395,6 +425,9 @@ async def search_hybrid(
     *,
     embedding_service: BaseEmbeddingService | None = None,
     session_id: str | None = None,
+    memory_types: list[str] | None = None,
+    entity_types: list[str] | None = None,
+    session_range: tuple[int, int] | None = None,
     top_k: int | None = None,
 ) -> list[tuple[str, float]]:
     """Hybrid RRF search combining FTS5 and vector similarity.
@@ -412,15 +445,22 @@ async def search_hybrid(
     w_fts = settings.memory_weight_fts
     w_vec = settings.memory_weight_vec
 
+    filter_kw = dict(
+        session_id=session_id,
+        memory_types=memory_types,
+        entity_types=entity_types,
+        session_range=session_range,
+    )
+
     # Run searches concurrently
-    fts_task = search_fts(session, query, session_id=session_id, k=candidates_k)
+    fts_task = search_fts(session, query, k=candidates_k, **filter_kw)
 
     if embedding_service is not None:
         vec_task = search_vec(
             session, query,
             embedding_service=embedding_service,
-            session_id=session_id,
             k=candidates_k,
+            **filter_kw,
         )
         fts_results, vec_results = await asyncio.gather(fts_task, vec_task)
     else:
@@ -509,6 +549,9 @@ async def search_with_stanford_scoring(
     *,
     embedding_service: BaseEmbeddingService | None = None,
     session_id: str | None = None,
+    memory_types: list[str] | None = None,
+    entity_types: list[str] | None = None,
+    session_range: tuple[int, int] | None = None,
     top_k: int | None = None,
 ) -> list[tuple[str, float]]:
     """Stanford Generative Agents reranker on top of hybrid RRF candidates.
@@ -518,12 +561,19 @@ async def search_with_stanford_scoring(
 
     Falls back to plain search_hybrid() when stanford scoring is disabled.
     """
+    filter_kw = dict(
+        session_id=session_id,
+        memory_types=memory_types,
+        entity_types=entity_types,
+        session_range=session_range,
+    )
+
     if not settings.memory_stanford_scoring_enabled:
         return await search_hybrid(
             session, query,
             embedding_service=embedding_service,
-            session_id=session_id,
             top_k=top_k,
+            **filter_kw,
         )
 
     k = top_k or settings.memory_search_top_k
@@ -532,8 +582,8 @@ async def search_with_stanford_scoring(
     rrf_results = await search_hybrid(
         session, query,
         embedding_service=embedding_service,
-        session_id=session_id,
         top_k=settings.memory_search_candidates_k,
+        **filter_kw,
     )
     if not rrf_results:
         return []
