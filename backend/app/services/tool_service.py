@@ -132,6 +132,18 @@ class ToolService:
         result = func(**arguments)
         if asyncio.iscoroutine(result):
             result = await result
+
+        # Phase 3.3: Auto-extract relationship edges
+        if session is not None and conversation_id is not None:
+            try:
+                from app.services.relationship_extractor import extract_relationships
+                await extract_relationships(
+                    func_name, arguments, result,
+                    session=session, conversation_id=conversation_id,
+                )
+            except Exception:
+                logger.debug("Relationship extraction hook error for %s", func_name, exc_info=True)
+
         return result
 
     def _execute_mock(self, tool: Tool, arguments: dict) -> str:

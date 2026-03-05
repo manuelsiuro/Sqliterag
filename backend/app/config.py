@@ -89,6 +89,9 @@ class Settings(BaseSettings):
     # Knowledge graph (Phase 3.1)
     knowledge_graph_enabled: bool = True
 
+    # Auto-extract relationships from tool results (Phase 3.3)
+    auto_extract_relationships: bool = True
+
     # Server
     host: str = "0.0.0.0"
     port: int = 8000
