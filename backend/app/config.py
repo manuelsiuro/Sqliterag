@@ -97,6 +97,9 @@ class Settings(BaseSettings):
     graph_context_strength_threshold: int = 30
     graph_context_max_relations: int = 8
 
+    # Recursive CTE traversal (Phase 3.5)
+    graph_max_traversal_depth: int = 3
+
     # Server
     host: str = "0.0.0.0"
     port: int = 8000

@@ -87,6 +87,8 @@ registerToolRenderer("session_ended", MemoryRenderer);
 import { RelationshipRenderer } from "./RelationshipRenderer";
 registerToolRenderer("relationship_added", RelationshipRenderer);
 registerToolRenderer("relationship_graph", RelationshipRenderer);
+registerToolRenderer("connection_paths", RelationshipRenderer);
+registerToolRenderer("connection_map", RelationshipRenderer);
 
 // Phase 12 — Entity Context
 import { EntityContextRenderer } from "./EntityContextRenderer";

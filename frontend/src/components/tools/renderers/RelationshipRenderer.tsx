@@ -25,6 +25,7 @@ interface RelationshipEdge {
   relationship: string;
   strength: number;
   direction: "outgoing" | "incoming";
+  depth?: number;
 }
 
 interface RelationshipGraph {
@@ -33,6 +34,38 @@ interface RelationshipGraph {
   relationships: RelationshipEdge[];
   depth: number;
   count: number;
+  error?: string;
+}
+
+interface ConnectionPath {
+  hops: number;
+  nodes: EntityRef[];
+  relationships: string[];
+}
+
+interface ConnectionPaths {
+  type: "connection_paths";
+  source: EntityRef;
+  target: EntityRef;
+  paths: ConnectionPath[];
+  path_count: number;
+  max_depth: number;
+  error?: string;
+}
+
+interface ConnectedEntity {
+  name: string;
+  type: string;
+  depth: number;
+  via: string;
+}
+
+interface ConnectionMap {
+  type: "connection_map";
+  entity: EntityRef;
+  connected_entities: ConnectedEntity[];
+  count: number;
+  max_depth: number;
   error?: string;
 }
 
@@ -77,6 +110,8 @@ function displayRel(rel: string) {
   return rel.replace(/_/g, " ");
 }
 
+const DEPTH_LABELS: Record<number, string> = { 1: "Direct", 2: "2 hops", 3: "3 hops" };
+
 // -- Strength bar --
 
 function StrengthBar({ value }: { value: number }) {
@@ -90,6 +125,16 @@ function StrengthBar({ value }: { value: number }) {
       </div>
       <span className="text-[10px] text-gray-500 w-6 text-right">{pct}</span>
     </div>
+  );
+}
+
+// -- Entity pill --
+
+function EntityPill({ name, type }: EntityRef) {
+  return (
+    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-gray-700/50 text-gray-200 text-xs">
+      {entityIcon(type)} {name}
+    </span>
   );
 }
 
@@ -183,6 +228,9 @@ function RelationshipGraphCard({ d }: { d: RelationshipGraph }) {
                   </>
                 )}
                 <StrengthBar value={edge.strength} />
+                {edge.depth && edge.depth > 1 && (
+                  <span className="text-[10px] text-gray-600">d{edge.depth}</span>
+                )}
               </div>
             );
           })}
@@ -192,14 +240,110 @@ function RelationshipGraphCard({ d }: { d: RelationshipGraph }) {
   );
 }
 
+function ConnectionPathsCard({ d }: { d: ConnectionPaths }) {
+  if (d.error) {
+    return <div className="mt-2 text-red-400 text-sm">{d.error}</div>;
+  }
+
+  return (
+    <div className="bg-gray-800/30 rounded-lg px-3 py-2.5 border border-gray-700/30 space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="text-sm text-gray-400 font-medium">
+          Paths: {entityIcon(d.source.type)} {d.source.name} &rarr; {entityIcon(d.target.type)} {d.target.name}
+        </span>
+        <span className="text-[10px] text-gray-500">
+          {d.path_count} path{d.path_count !== 1 ? "s" : ""}
+        </span>
+      </div>
+
+      {d.paths.length === 0 ? (
+        <div className="text-xs text-gray-500 italic">No connections found within {d.max_depth} hops.</div>
+      ) : (
+        <div className="space-y-2">
+          {d.paths.map((path, pi) => (
+            <div key={pi} className="flex items-center gap-1 text-xs flex-wrap py-1 border-t border-gray-700/20 first:border-0 first:pt-0">
+              <span className="text-[10px] text-gray-600 mr-1">{path.hops}h</span>
+              {path.nodes.map((node, ni) => (
+                <span key={ni} className="contents">
+                  <EntityPill name={node.name} type={node.type} />
+                  {ni < path.relationships.length && (
+                    <span className="contents">
+                      <span className="text-gray-600 mx-0.5">&rarr;</span>
+                      <span className={`px-1.5 py-0.5 rounded-full ${getRelColor(path.relationships[ni]).bg} ${getRelColor(path.relationships[ni]).text} border ${getRelColor(path.relationships[ni]).border}`}>
+                        {displayRel(path.relationships[ni])}
+                      </span>
+                      <span className="text-gray-600 mx-0.5">&rarr;</span>
+                    </span>
+                  )}
+                </span>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ConnectionMapCard({ d }: { d: ConnectionMap }) {
+  if (d.error) {
+    return <div className="mt-2 text-red-400 text-sm">{d.error}</div>;
+  }
+
+  // Group by depth
+  const byDepth = new Map<number, ConnectedEntity[]>();
+  for (const e of d.connected_entities) {
+    const arr = byDepth.get(e.depth) || [];
+    arr.push(e);
+    byDepth.set(e.depth, arr);
+  }
+  const depths = Array.from(byDepth.keys()).sort((a, b) => a - b);
+
+  return (
+    <div className="bg-gray-800/30 rounded-lg px-3 py-2.5 border border-gray-700/30 space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="text-sm text-gray-400 font-medium">
+          {entityIcon(d.entity.type)} {d.entity.name}
+          <span className="text-gray-500 ml-1 text-xs">connections</span>
+        </span>
+        <span className="text-[10px] text-gray-500">
+          {d.count} reachable (max {d.max_depth} hops)
+        </span>
+      </div>
+
+      {d.connected_entities.length === 0 ? (
+        <div className="text-xs text-gray-500 italic">No connections found.</div>
+      ) : (
+        <div className="space-y-2">
+          {depths.map((depth) => (
+            <div key={depth}>
+              <div className="text-[10px] text-gray-500 font-medium mb-1">
+                {DEPTH_LABELS[depth] || `${depth} hops`}
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {byDepth.get(depth)!.map((entity, ei) => (
+                  <div key={ei} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-gray-700/40 text-xs">
+                    <span className="text-gray-200">{entityIcon(entity.type)} {entity.name}</span>
+                    <span className="text-gray-500 text-[10px]">via {entity.via}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // -- Main renderer --
 
 export function RelationshipRenderer({ data }: ToolRendererProps) {
-  const raw = data as RelationshipAdded | RelationshipGraph;
+  const raw = data as RelationshipAdded | RelationshipGraph | ConnectionPaths | ConnectionMap;
 
-  if (raw.type === "relationship_added") {
-    return <RelationshipAddedCard d={raw as RelationshipAdded} />;
-  }
-
+  if (raw.error) return <div className="mt-2 text-red-400 text-sm">{raw.error}</div>;
+  if (raw.type === "relationship_added") return <RelationshipAddedCard d={raw as RelationshipAdded} />;
+  if (raw.type === "connection_paths") return <ConnectionPathsCard d={raw as ConnectionPaths} />;
+  if (raw.type === "connection_map") return <ConnectionMapCard d={raw as ConnectionMap} />;
   return <RelationshipGraphCard d={raw as RelationshipGraph} />;
 }

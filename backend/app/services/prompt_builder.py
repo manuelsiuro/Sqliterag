@@ -45,6 +45,7 @@ RPG_TOOL_NAMES = {
     "archive_event", "search_memory", "recall_context", "get_session_summary", "end_session",
     # Knowledge Graph
     "add_relationship", "query_relationships", "get_entity_relationships", "get_entity_context",
+    "find_connections",
 }
 
 # Static fallback — identical to the old RPG_SYSTEM_PROMPT
@@ -124,7 +125,7 @@ _CORE_TOOLS: frozenset[str] = frozenset({
     # Memory
     "archive_event", "search_memory", "recall_context", "get_session_summary", "end_session",
     # Knowledge Graph (read)
-    "query_relationships", "get_entity_relationships", "get_entity_context",
+    "query_relationships", "get_entity_relationships", "get_entity_context", "find_connections",
 })
 
 _PHASE_TOOLS: dict[GamePhase, frozenset[str]] = {

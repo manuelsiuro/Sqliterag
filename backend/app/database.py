@@ -730,12 +730,12 @@ def _builtin_tool_defs() -> dict[str, dict]:
             "execution_config": _config("add_relationship"),
         },
         "query_relationships": {
-            "description": "Query the relationship graph for an entity. Returns connections and optionally 2-hop neighbors. Use to understand who knows what and how entities relate.",
+            "description": "Query the relationship graph for an entity. Returns connections up to 3 hops deep. Use to understand who knows what and how entities relate.",
             "parameters_schema": _schema(["entity_name"], {
                 "entity_name": {"type": "string", "description": "Name of the entity to query"},
                 "entity_type": {"type": "string", "description": "Type: character, npc, location, quest, item. Auto-detected if empty."},
                 "relationship_filter": {"type": "string", "description": "Filter by relationship type. Empty for all."},
-                "depth": {"type": "integer", "description": "Traversal depth: 1=direct, 2=two-hop. Default 1."},
+                "depth": {"type": "integer", "description": "Traversal depth: 1=direct, 2=two-hop, 3=three-hop. Default 1."},
             }),
             "execution_type": "builtin",
             "execution_config": _config("query_relationships"),
@@ -757,6 +757,19 @@ def _builtin_tool_defs() -> dict[str, dict]:
             }),
             "execution_type": "builtin",
             "execution_config": _config("get_entity_context"),
+        },
+        "find_connections": {
+            "description": "Find connections between entities in the knowledge graph. With one entity: discovers everything connected within N hops. With two entities: finds all paths connecting them. Use for 'who knows about X?', 'how is A connected to B?'.",
+            "parameters_schema": _schema(["entity_name"], {
+                "entity_name": {"type": "string", "description": "Starting entity name"},
+                "target_name": {"type": "string", "description": "Target entity name. If provided, finds paths between source and target."},
+                "entity_type": {"type": "string", "description": "Source type: character, npc, location, quest, item. Auto-detected if empty."},
+                "target_type": {"type": "string", "description": "Target type. Auto-detected if empty."},
+                "max_depth": {"type": "integer", "description": "Max traversal depth 1-3 (default 3)."},
+                "relationship_filter": {"type": "string", "description": "Filter by relationship type. Empty for all."},
+            }),
+            "execution_type": "builtin",
+            "execution_config": _config("find_connections"),
         },
     }
 

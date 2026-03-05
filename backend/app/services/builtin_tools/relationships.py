@@ -1,9 +1,11 @@
-"""Knowledge graph relationship tools (Phase 3.1)."""
+"""Knowledge graph relationship tools (Phase 3.1 + 3.5 CTE traversal)."""
 
 from __future__ import annotations
 
 import re
 from datetime import datetime, timezone
+
+from sqlalchemy import text
 
 from app.services.builtin_tools._common import (
     AsyncSession,
@@ -40,6 +42,18 @@ async def _auto_detect_entity(
         if eid:
             return (etype, eid)
     return ("unknown", None)
+
+
+async def _resolve_names_batch(
+    session: AsyncSession,
+    entity_pairs: set[tuple[str, str]],
+) -> dict[tuple[str, str], str]:
+    """Resolve multiple entity IDs to display names in batch."""
+    result: dict[tuple[str, str], str] = {}
+    for etype, eid in entity_pairs:
+        name = await resolve_entity_name(session, etype, eid)
+        result[(etype, eid)] = name or f"unknown-{eid[:8]}"
+    return result
 
 
 async def add_relationship(
@@ -138,12 +152,12 @@ async def query_relationships(
     session: AsyncSession,
     conversation_id: str,
 ) -> str:
-    """Query the relationship graph for an entity."""
-    from app.models.rpg import Relationship
+    """Query the relationship graph for an entity using recursive CTE."""
+    from app.config import settings
 
     gs = await get_or_create_session(session, conversation_id)
 
-    depth = max(1, min(2, depth))
+    depth = max(1, min(settings.graph_max_traversal_depth, depth))
 
     # Resolve entity
     if entity_type and entity_type.strip():
@@ -155,81 +169,109 @@ async def query_relationships(
     if not entity_id:
         return json.dumps({"type": "relationship_graph", "error": f"Entity '{entity_name}' not found."})
 
-    # Depth-1: direct connections
-    edges = []
-    visited_edges: set[str] = set()
+    root_key = f"{entity_type}:{entity_id}"
+    rel_filter = _normalize_relationship(relationship_filter) if relationship_filter else ""
 
-    async def _fetch_edges(etype: str, eid: str) -> list[dict]:
-        """Fetch all edges where entity is source or target."""
-        results = []
+    # Build CTE — relationship_filter only applies to base cases
+    base_out_filter = "\n      AND r.relationship = :rel_filter" if rel_filter else ""
+    base_in_filter = "\n      AND r.relationship = :rel_filter" if rel_filter else ""
 
-        # As source
-        q = select(Relationship).where(
-            Relationship.session_id == gs.id,
-            Relationship.source_type == etype,
-            Relationship.source_id == eid,
-        )
-        if relationship_filter:
-            q = q.where(Relationship.relationship == _normalize_relationship(relationship_filter))
-        rows = (await session.execute(q)).scalars().all()
-        for r in rows:
-            edge_key = f"{r.source_type}:{r.source_id}-{r.relationship}-{r.target_type}:{r.target_id}"
-            if edge_key not in visited_edges:
-                visited_edges.add(edge_key)
-                target_name = await resolve_entity_name(session, r.target_type, r.target_id)
-                results.append({
-                    "source_name": entity_name if (r.source_type == etype and r.source_id == eid) else await resolve_entity_name(session, r.source_type, r.source_id),
-                    "source_type": r.source_type,
-                    "target_name": target_name,
-                    "target_type": r.target_type,
-                    "relationship": r.relationship,
-                    "strength": r.strength,
-                    "direction": "outgoing",
-                })
+    cte_sql = f"""
+    WITH RECURSIVE graph(
+        entity_type, entity_id, depth,
+        path,
+        edge_src_type, edge_src_id,
+        edge_tgt_type, edge_tgt_id,
+        rel, strength, direction
+    ) AS (
+        -- Base: outgoing from root
+        SELECT r.target_type, r.target_id, 1,
+               :root_key || '|' || r.target_type || ':' || r.target_id,
+               r.source_type, r.source_id,
+               r.target_type, r.target_id,
+               r.relationship, r.strength, 'outgoing'
+        FROM rpg_relationships r
+        WHERE r.session_id = :sid
+          AND r.source_type = :rt AND r.source_id = :ri{base_out_filter}
+        UNION ALL
+        -- Base: incoming to root
+        SELECT r.source_type, r.source_id, 1,
+               :root_key || '|' || r.source_type || ':' || r.source_id,
+               r.source_type, r.source_id,
+               r.target_type, r.target_id,
+               r.relationship, r.strength, 'incoming'
+        FROM rpg_relationships r
+        WHERE r.session_id = :sid
+          AND r.target_type = :rt AND r.target_id = :ri{base_in_filter}
+        UNION ALL
+        -- Recursive: outgoing from discovered nodes
+        SELECT r.target_type, r.target_id, g.depth + 1,
+               g.path || '|' || r.target_type || ':' || r.target_id,
+               r.source_type, r.source_id,
+               r.target_type, r.target_id,
+               r.relationship, r.strength, 'outgoing'
+        FROM rpg_relationships r
+        JOIN graph g ON r.source_type = g.entity_type AND r.source_id = g.entity_id
+        WHERE r.session_id = :sid AND g.depth < :max_depth
+          AND g.path NOT LIKE '%' || r.target_type || ':' || r.target_id || '%'
+        UNION ALL
+        -- Recursive: incoming to discovered nodes
+        SELECT r.source_type, r.source_id, g.depth + 1,
+               g.path || '|' || r.source_type || ':' || r.source_id,
+               r.source_type, r.source_id,
+               r.target_type, r.target_id,
+               r.relationship, r.strength, 'incoming'
+        FROM rpg_relationships r
+        JOIN graph g ON r.target_type = g.entity_type AND r.target_id = g.entity_id
+        WHERE r.session_id = :sid AND g.depth < :max_depth
+          AND g.path NOT LIKE '%' || r.source_type || ':' || r.source_id || '%'
+    )
+    SELECT DISTINCT
+        edge_src_type, edge_src_id, edge_tgt_type, edge_tgt_id,
+        rel, strength, depth, direction
+    FROM graph
+    ORDER BY depth, strength DESC
+    """
 
-        # As target
-        q = select(Relationship).where(
-            Relationship.session_id == gs.id,
-            Relationship.target_type == etype,
-            Relationship.target_id == eid,
-        )
-        if relationship_filter:
-            q = q.where(Relationship.relationship == _normalize_relationship(relationship_filter))
-        rows = (await session.execute(q)).scalars().all()
-        for r in rows:
-            edge_key = f"{r.source_type}:{r.source_id}-{r.relationship}-{r.target_type}:{r.target_id}"
-            if edge_key not in visited_edges:
-                visited_edges.add(edge_key)
-                source_name = await resolve_entity_name(session, r.source_type, r.source_id)
-                results.append({
-                    "source_name": source_name,
-                    "source_type": r.source_type,
-                    "target_name": entity_name if (r.target_type == etype and r.target_id == eid) else await resolve_entity_name(session, r.target_type, r.target_id),
-                    "target_type": r.target_type,
-                    "relationship": r.relationship,
-                    "strength": r.strength,
-                    "direction": "incoming",
-                })
+    params: dict = {
+        "root_key": root_key,
+        "sid": gs.id,
+        "rt": entity_type,
+        "ri": entity_id,
+        "max_depth": depth,
+    }
+    if rel_filter:
+        params["rel_filter"] = rel_filter
 
-        return results
+    result = await session.execute(text(cte_sql), params)
+    rows = result.fetchall()
 
-    # Depth 1
-    edges = await _fetch_edges(entity_type, entity_id)
+    # Collect all entity IDs for batch name resolution
+    entity_pairs: set[tuple[str, str]] = set()
+    for row in rows:
+        entity_pairs.add((row[0], row[1]))  # edge_src_type, edge_src_id
+        entity_pairs.add((row[2], row[3]))  # edge_tgt_type, edge_tgt_id
 
-    # Depth 2: traverse neighbors
-    if depth >= 2:
-        neighbor_ids: list[tuple[str, str]] = []
-        for e in edges:
-            if e["direction"] == "outgoing":
-                neighbor_ids.append((e["target_type"], e["target_name"]))
-            else:
-                neighbor_ids.append((e["source_type"], e["source_name"]))
+    names = await _resolve_names_batch(session, entity_pairs)
 
-        for n_type, n_name in neighbor_ids:
-            _, n_id = await resolve_entity(session, gs.id, n_type, n_name)
-            if n_id and (n_type, n_id) != (entity_type, entity_id):
-                hop2 = await _fetch_edges(n_type, n_id)
-                edges.extend(hop2)
+    # Build edge list
+    seen_edges: set[str] = set()
+    edges: list[dict] = []
+    for row in rows:
+        edge_key = f"{row[0]}:{row[1]}-{row[4]}-{row[2]}:{row[3]}"
+        if edge_key in seen_edges:
+            continue
+        seen_edges.add(edge_key)
+        edges.append({
+            "source_name": names[(row[0], row[1])],
+            "source_type": row[0],
+            "target_name": names[(row[2], row[3])],
+            "target_type": row[2],
+            "relationship": row[4],
+            "strength": row[5],
+            "direction": row[7],
+            "depth": row[6],
+        })
 
     return json.dumps({
         "type": "relationship_graph",
@@ -458,4 +500,226 @@ async def get_entity_context(
         "memories": memories,
         "memory_count": len(memories),
         "summary": summary,
+    })
+
+
+async def find_connections(
+    entity_name: str,
+    target_name: str = "",
+    entity_type: str = "",
+    target_type: str = "",
+    max_depth: int = 3,
+    relationship_filter: str = "",
+    *,
+    session: AsyncSession,
+    conversation_id: str,
+) -> str:
+    """Find connections between entities or discover all reachable entities."""
+    from app.config import settings
+
+    gs = await get_or_create_session(session, conversation_id)
+    max_depth = max(1, min(settings.graph_max_traversal_depth, max_depth))
+
+    # Resolve source entity
+    if entity_type and entity_type.strip():
+        entity_type = entity_type.lower().strip()
+        _, entity_id = await resolve_entity(session, gs.id, entity_type, entity_name)
+    else:
+        entity_type, entity_id = await _auto_detect_entity(session, gs.id, entity_name)
+
+    if not entity_id:
+        err_type = "connection_paths" if target_name else "connection_map"
+        return json.dumps({"type": err_type, "error": f"Entity '{entity_name}' not found."})
+
+    root_key = f"{entity_type}:{entity_id}"
+    rel_filter = _normalize_relationship(relationship_filter) if relationship_filter else ""
+    base_filter = "\n      AND r.relationship = :rel_filter" if rel_filter else ""
+
+    # --- Mode 1: Two-entity path finding ---
+    if target_name and target_name.strip():
+        if target_type and target_type.strip():
+            target_type = target_type.lower().strip()
+            _, target_id = await resolve_entity(session, gs.id, target_type, target_name)
+        else:
+            target_type, target_id = await _auto_detect_entity(session, gs.id, target_name)
+
+        if not target_id:
+            return json.dumps({"type": "connection_paths", "error": f"Target entity '{target_name}' not found."})
+
+        path_sql = f"""
+        WITH RECURSIVE paths(
+            entity_type, entity_id, depth, path, rels
+        ) AS (
+            -- Base outgoing
+            SELECT r.target_type, r.target_id, 1,
+                   :root_key || '|' || r.target_type || ':' || r.target_id,
+                   r.relationship
+            FROM rpg_relationships r
+            WHERE r.session_id = :sid
+              AND r.source_type = :rt AND r.source_id = :ri{base_filter}
+            UNION ALL
+            -- Base incoming
+            SELECT r.source_type, r.source_id, 1,
+                   :root_key || '|' || r.source_type || ':' || r.source_id,
+                   r.relationship
+            FROM rpg_relationships r
+            WHERE r.session_id = :sid
+              AND r.target_type = :rt AND r.target_id = :ri{base_filter}
+            UNION ALL
+            -- Recursive outgoing
+            SELECT r.target_type, r.target_id, p.depth + 1,
+                   p.path || '|' || r.target_type || ':' || r.target_id,
+                   p.rels || '|' || r.relationship
+            FROM rpg_relationships r
+            JOIN paths p ON r.source_type = p.entity_type AND r.source_id = p.entity_id
+            WHERE r.session_id = :sid AND p.depth < :max_depth
+              AND p.path NOT LIKE '%' || r.target_type || ':' || r.target_id || '%'
+            UNION ALL
+            -- Recursive incoming
+            SELECT r.source_type, r.source_id, p.depth + 1,
+                   p.path || '|' || r.source_type || ':' || r.source_id,
+                   p.rels || '|' || r.relationship
+            FROM rpg_relationships r
+            JOIN paths p ON r.target_type = p.entity_type AND r.target_id = p.entity_id
+            WHERE r.session_id = :sid AND p.depth < :max_depth
+              AND p.path NOT LIKE '%' || r.source_type || ':' || r.source_id || '%'
+        )
+        SELECT path, rels, depth FROM paths
+        WHERE entity_type = :tt AND entity_id = :ti
+        ORDER BY depth LIMIT 10
+        """
+
+        params: dict = {
+            "root_key": root_key, "sid": gs.id,
+            "rt": entity_type, "ri": entity_id,
+            "tt": target_type, "ti": target_id,
+            "max_depth": max_depth,
+        }
+        if rel_filter:
+            params["rel_filter"] = rel_filter
+
+        result = await session.execute(text(path_sql), params)
+        rows = result.fetchall()
+
+        # Collect all entity IDs from paths for batch resolution
+        entity_pairs: set[tuple[str, str]] = set()
+        for row in rows:
+            for segment in row[0].split("|"):
+                if ":" in segment:
+                    parts = segment.split(":", 1)
+                    entity_pairs.add((parts[0], parts[1]))
+
+        names = await _resolve_names_batch(session, entity_pairs)
+
+        paths = []
+        for row in rows:
+            segments = row[0].split("|")
+            nodes = []
+            for seg in segments:
+                if ":" in seg:
+                    parts = seg.split(":", 1)
+                    n = names.get((parts[0], parts[1]), parts[1][:8])
+                    nodes.append({"name": n, "type": parts[0]})
+            rels_list = row[1].split("|")
+            paths.append({
+                "hops": row[2],
+                "nodes": nodes,
+                "relationships": rels_list,
+            })
+
+        src_name = names.get((entity_type, entity_id), entity_name)
+        tgt_name = names.get((target_type, target_id), target_name)
+
+        return json.dumps({
+            "type": "connection_paths",
+            "source": {"name": src_name, "type": entity_type},
+            "target": {"name": tgt_name, "type": target_type},
+            "paths": paths,
+            "path_count": len(paths),
+            "max_depth": max_depth,
+        })
+
+    # --- Mode 2: Single-entity discovery ---
+    map_sql = f"""
+    WITH RECURSIVE paths(
+        entity_type, entity_id, depth, path, rels
+    ) AS (
+        -- Base outgoing
+        SELECT r.target_type, r.target_id, 1,
+               :root_key || '|' || r.target_type || ':' || r.target_id,
+               r.relationship
+        FROM rpg_relationships r
+        WHERE r.session_id = :sid
+          AND r.source_type = :rt AND r.source_id = :ri{base_filter}
+        UNION ALL
+        -- Base incoming
+        SELECT r.source_type, r.source_id, 1,
+               :root_key || '|' || r.source_type || ':' || r.source_id,
+               r.relationship
+        FROM rpg_relationships r
+        WHERE r.session_id = :sid
+          AND r.target_type = :rt AND r.target_id = :ri{base_filter}
+        UNION ALL
+        -- Recursive outgoing
+        SELECT r.target_type, r.target_id, p.depth + 1,
+               p.path || '|' || r.target_type || ':' || r.target_id,
+               p.rels || '|' || r.relationship
+        FROM rpg_relationships r
+        JOIN paths p ON r.source_type = p.entity_type AND r.source_id = p.entity_id
+        WHERE r.session_id = :sid AND p.depth < :max_depth
+          AND p.path NOT LIKE '%' || r.target_type || ':' || r.target_id || '%'
+        UNION ALL
+        -- Recursive incoming
+        SELECT r.source_type, r.source_id, p.depth + 1,
+               p.path || '|' || r.source_type || ':' || r.source_id,
+               p.rels || '|' || r.relationship
+        FROM rpg_relationships r
+        JOIN paths p ON r.target_type = p.entity_type AND r.target_id = p.entity_id
+        WHERE r.session_id = :sid AND p.depth < :max_depth
+          AND p.path NOT LIKE '%' || r.source_type || ':' || r.source_id || '%'
+    )
+    SELECT entity_type, entity_id, MIN(depth) as min_depth,
+           -- Pick the rels string from the shortest path
+           MIN(rels) as via_rels
+    FROM paths
+    GROUP BY entity_type, entity_id
+    ORDER BY min_depth, MIN(LENGTH(path))
+    """
+
+    params = {
+        "root_key": root_key, "sid": gs.id,
+        "rt": entity_type, "ri": entity_id,
+        "max_depth": max_depth,
+    }
+    if rel_filter:
+        params["rel_filter"] = rel_filter
+
+    result = await session.execute(text(map_sql), params)
+    rows = result.fetchall()
+
+    entity_pairs: set[tuple[str, str]] = set()
+    for row in rows:
+        entity_pairs.add((row[0], row[1]))
+
+    names = await _resolve_names_batch(session, entity_pairs)
+
+    connected: list[dict] = []
+    for row in rows:
+        rels_list = row[3].split("|")
+        via = " > ".join(r.replace("_", " ") for r in rels_list)
+        connected.append({
+            "name": names.get((row[0], row[1]), row[1][:8]),
+            "type": row[0],
+            "depth": row[2],
+            "via": via,
+        })
+
+    src_name = await resolve_entity_name(session, entity_type, entity_id)
+
+    return json.dumps({
+        "type": "connection_map",
+        "entity": {"name": src_name or entity_name, "type": entity_type},
+        "connected_entities": connected,
+        "count": len(connected),
+        "max_depth": max_depth,
     })

@@ -28,6 +28,7 @@ _ARGUMENT_ALIASES: dict[str, dict[str, str]] = {
     "query_relationships": {"name": "entity_name", "type": "entity_type"},
     "get_entity_relationships": {"name": "entity_name", "type": "entity_type"},
     "get_entity_context": {"name": "entity_name", "type": "entity_type"},
+    "find_connections": {"name": "entity_name", "type": "entity_type", "source": "entity_name", "target": "target_name"},
 }
 
 
