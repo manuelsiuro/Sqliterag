@@ -74,3 +74,9 @@ registerToolRenderer("rest_result", RestResultRenderer);
 import { GameStateRenderer } from "./GameStateRenderer";
 registerToolRenderer("game_session", GameStateRenderer);
 registerToolRenderer("game_state", GameStateRenderer);
+
+// Phase 10 — Memory
+import { MemoryRenderer } from "./MemoryRenderer";
+registerToolRenderer("memory_archived", MemoryRenderer);
+registerToolRenderer("memory_results", MemoryRenderer);
+registerToolRenderer("session_summary", MemoryRenderer);

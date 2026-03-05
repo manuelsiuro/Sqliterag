@@ -622,6 +622,36 @@ def _builtin_tool_defs() -> dict[str, dict]:
             "execution_type": "builtin",
             "execution_config": _config("get_game_state"),
         },
+
+        # ── Phase 10: Memory Management ─────────────────────────
+        "archive_event": {
+            "description": "Record a significant story event into long-term game memory for future recall. Use for important plot points, discoveries, battles, and character moments.",
+            "parameters_schema": _schema(["description"], {
+                "description": {"type": "string", "description": "Description of the event to remember."},
+                "importance": {"type": "integer", "description": "Importance level 1-10 (1=trivial, 10=critical). Default: 5."},
+                "entity_names": {"type": "string", "description": "Comma-separated names of entities involved (characters, locations, items)."},
+                "memory_type": {"type": "string", "description": "Memory category: episodic (events), semantic (facts/lore), procedural (rules/tactics). Default: episodic."},
+            }),
+            "execution_type": "builtin",
+            "execution_config": _config("archive_event"),
+        },
+        "search_memory": {
+            "description": "Search long-term game memory for past events, facts, or knowledge relevant to a query.",
+            "parameters_schema": _schema(["query"], {
+                "query": {"type": "string", "description": "Search query describing what to recall."},
+                "memory_type": {"type": "string", "description": "Filter by memory type: episodic, semantic, procedural. Leave empty for all."},
+            }),
+            "execution_type": "builtin",
+            "execution_config": _config("search_memory"),
+        },
+        "get_session_summary": {
+            "description": "Get a chronological summary of all archived memories for the current game session.",
+            "parameters_schema": _schema([], {
+                "session_number": {"type": "integer", "description": "Session number to summarize (default: current session)."},
+            }),
+            "execution_type": "builtin",
+            "execution_config": _config("get_session_summary"),
+        },
     }
 
 

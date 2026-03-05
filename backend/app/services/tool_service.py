@@ -35,13 +35,15 @@ class ToolService:
         *,
         session: AsyncSession | None = None,
         conversation_id: str | None = None,
+        embedding_service=None,
     ) -> str:
         try:
             if tool.execution_type == "http":
                 return await self._execute_http(tool, arguments)
             elif tool.execution_type == "builtin":
                 return await self._execute_builtin(
-                    tool, arguments, session=session, conversation_id=conversation_id
+                    tool, arguments, session=session, conversation_id=conversation_id,
+                    embedding_service=embedding_service,
                 )
             return self._execute_mock(tool, arguments)
         except Exception as e:
@@ -78,6 +80,7 @@ class ToolService:
         *,
         session: AsyncSession | None = None,
         conversation_id: str | None = None,
+        embedding_service=None,
     ) -> str:
         config = json.loads(tool.execution_config) if isinstance(tool.execution_config, str) else tool.execution_config
         func_name = config.get("function_name", "")
@@ -98,6 +101,8 @@ class ToolService:
             arguments = {**arguments, "session": session}
         if "conversation_id" in sig.parameters and conversation_id is not None:
             arguments = {**arguments, "conversation_id": conversation_id}
+        if "embedding_service" in sig.parameters and embedding_service is not None:
+            arguments = {**arguments, "embedding_service": embedding_service}
 
         # Strip unknown arguments the LLM may hallucinate (e.g. "age",
         # "traits", "profession" for create_npc).  Only keep params that

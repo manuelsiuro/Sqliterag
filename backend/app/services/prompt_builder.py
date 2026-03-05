@@ -41,6 +41,8 @@ RPG_TOOL_NAMES = {
     "short_rest", "long_rest",
     # Game Session
     "init_game_session", "get_game_state",
+    # Memory
+    "archive_event", "search_memory", "get_session_summary",
 }
 
 # Static fallback — identical to the old RPG_SYSTEM_PROMPT
@@ -117,6 +119,8 @@ _CORE_TOOLS: frozenset[str] = frozenset({
     "init_game_session", "get_game_state",
     # Quests
     "create_quest", "update_quest_objective", "complete_quest", "get_quest_journal",
+    # Memory
+    "archive_event", "search_memory", "get_session_summary",
 })
 
 _PHASE_TOOLS: dict[GamePhase, frozenset[str]] = {
@@ -178,6 +182,7 @@ def _build_layer1_identity() -> str:
         "- When starting a new game, use init_game_session first.\n"
         "- Give characters evocative fantasy names. Never use generic names like 'Adventurer'.\n"
         "- Give worlds distinctive fantasy names.\n"
+        "- Use archive_event to record significant story moments for long-term memory.\n"
     )
 
 
