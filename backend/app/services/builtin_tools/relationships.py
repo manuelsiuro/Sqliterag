@@ -7,7 +7,12 @@ from datetime import datetime, timezone
 
 from app.services.builtin_tools._common import (
     AsyncSession,
+    character_to_dict,
+    get_character_by_name,
+    get_location_by_name,
+    get_npc_by_name,
     get_or_create_session,
+    get_quest_by_title,
     json,
     resolve_entity,
     resolve_entity_name,
@@ -251,3 +256,206 @@ async def get_entity_relationships(
         session=session,
         conversation_id=conversation_id,
     )
+
+
+async def get_entity_context(
+    entity_name: str,
+    entity_type: str = "",
+    *,
+    session: AsyncSession,
+    conversation_id: str,
+    embedding_service=None,
+) -> str:
+    """Compile a comprehensive context dossier for any game entity."""
+    from app.models.rpg import GameMemory, Item
+
+    gs = await get_or_create_session(session, conversation_id)
+
+    # --- 1. Resolve entity ---
+    if entity_type and entity_type.strip():
+        entity_type = entity_type.lower().strip()
+        _, entity_id = await resolve_entity(session, gs.id, entity_type, entity_name)
+    else:
+        entity_type, entity_id = await _auto_detect_entity(session, gs.id, entity_name)
+
+    if not entity_id:
+        return json.dumps({"type": "entity_context", "error": f"Entity '{entity_name}' not found."})
+
+    # --- 2. Fetch entity details ---
+    details: dict = {}
+    display_name = entity_name
+
+    if entity_type == "character":
+        char = await get_character_by_name(session, gs.id, entity_name)
+        if char:
+            d = character_to_dict(char)
+            display_name = d.get("name", entity_name)
+            details = {
+                "name": d.get("name"), "race": d.get("race"), "class": d.get("class"),
+                "level": d.get("level"), "hp": f"{d.get('current_hp')}/{d.get('max_hp')}",
+                "ac": d.get("armor_class"),
+                "abilities": {
+                    k: d.get(k) for k in ("strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma")
+                },
+                "conditions": d.get("conditions", []),
+            }
+
+    elif entity_type == "npc":
+        npc = await get_npc_by_name(session, gs.id, entity_name)
+        if npc:
+            display_name = npc.name
+            loc_name = None
+            if npc.location_id:
+                loc_name = await resolve_entity_name(session, "location", npc.location_id)
+            memory = []
+            if npc.memory:
+                try:
+                    memory = json.loads(npc.memory)
+                except (json.JSONDecodeError, TypeError):
+                    memory = []
+            details = {
+                "name": npc.name, "description": npc.description,
+                "disposition": npc.disposition, "familiarity": npc.familiarity,
+                "location": loc_name, "memory": memory,
+            }
+
+    elif entity_type == "location":
+        loc = await get_location_by_name(session, gs.id, entity_name)
+        if loc:
+            display_name = loc.name
+            exits_raw = json.loads(loc.exits) if loc.exits else {}
+            exits = {}
+            for direction, lid in exits_raw.items():
+                exits[direction] = await resolve_entity_name(session, "location", lid)
+            env = json.loads(loc.environment) if loc.environment else {}
+            details = {
+                "name": loc.name, "description": loc.description,
+                "biome": loc.biome, "exits": exits, "environment": env,
+            }
+
+    elif entity_type == "quest":
+        quest = await get_quest_by_title(session, gs.id, entity_name)
+        if quest:
+            display_name = quest.title
+            objectives = []
+            if quest.objectives:
+                try:
+                    objectives = json.loads(quest.objectives)
+                except (json.JSONDecodeError, TypeError):
+                    objectives = []
+            rewards = {}
+            if quest.rewards:
+                try:
+                    rewards = json.loads(quest.rewards)
+                except (json.JSONDecodeError, TypeError):
+                    rewards = {}
+            details = {
+                "name": quest.title, "description": quest.description,
+                "status": quest.status, "objectives": objectives, "rewards": rewards,
+            }
+
+    elif entity_type == "item":
+        result = await session.execute(
+            select(Item).where(Item.name.ilike(entity_name))
+        )
+        item = result.scalars().first()
+        if item:
+            display_name = item.name
+            props = {}
+            if item.properties:
+                try:
+                    props = json.loads(item.properties)
+                except (json.JSONDecodeError, TypeError):
+                    props = {}
+            details = {
+                "name": item.name, "item_type": item.item_type,
+                "description": item.description, "weight": item.weight,
+                "value_gp": item.value_gp, "rarity": item.rarity, "properties": props,
+            }
+
+    # --- 3. Fetch relationships (reuse query_relationships) ---
+    rels_json = await query_relationships(
+        entity_name=entity_name,
+        entity_type=entity_type,
+        relationship_filter="",
+        depth=1,
+        session=session,
+        conversation_id=conversation_id,
+    )
+    rels_data = json.loads(rels_json)
+    relationships = rels_data.get("relationships", [])
+
+    # --- 4. Search memories ---
+    memories: list[dict] = []
+    try:
+        from app.services.memory_service import search_with_stanford_scoring
+
+        results = await search_with_stanford_scoring(
+            session,
+            entity_name,
+            embedding_service=embedding_service,
+            session_id=gs.id,
+            top_k=5,
+        )
+        if results:
+            # results is list[(memory_id, score)] — fetch full records
+            mem_ids = [mid for mid, _ in results]
+            mem_result = await session.execute(
+                select(GameMemory).where(GameMemory.id.in_(mem_ids))
+            )
+            mem_map = {m.id: m for m in mem_result.scalars().all()}
+            for mid, score in results:
+                m = mem_map.get(mid)
+                if m:
+                    entities = []
+                    if m.entity_names:
+                        try:
+                            entities = json.loads(m.entity_names)
+                        except (json.JSONDecodeError, TypeError):
+                            entities = []
+                    memories.append({
+                        "content": m.content,
+                        "memory_type": m.memory_type,
+                        "importance": round(m.importance_score * 10),
+                        "entities": entities,
+                        "created_at": m.created_at.isoformat() if m.created_at else None,
+                    })
+    except Exception:
+        pass  # memories section empty on failure
+
+    # --- 5. Build compact summary ---
+    summary_parts = [f"{display_name} ({entity_type}"]
+    if entity_type == "character" and details.get("class"):
+        summary_parts[0] += f", L{details.get('level')} {details.get('class')}"
+    elif entity_type == "npc" and details.get("disposition"):
+        summary_parts[0] += f", {details.get('disposition')}"
+    elif entity_type == "location" and details.get("biome"):
+        summary_parts[0] += f", {details.get('biome')}"
+    elif entity_type == "quest" and details.get("status"):
+        summary_parts[0] += f", {details.get('status')}"
+    elif entity_type == "item" and details.get("rarity"):
+        summary_parts[0] += f", {details.get('rarity')}"
+    summary_parts[0] += ")"
+
+    if relationships:
+        rel_strs = []
+        for r in relationships[:3]:
+            other = r["target_name"] if r["direction"] == "outgoing" else r["source_name"]
+            rel_strs.append(f"{r['relationship'].replace('_', ' ')} {other} ({r['strength']})")
+        summary_parts.append("Relations: " + ", ".join(rel_strs))
+
+    if memories:
+        summary_parts.append(f"Memories: {memories[0]['content'][:60]}")
+
+    summary = ". ".join(summary_parts) + "."
+
+    return json.dumps({
+        "type": "entity_context",
+        "entity": {"name": display_name, "type": entity_type},
+        "details": details,
+        "relationships": relationships,
+        "relationship_count": len(relationships),
+        "memories": memories,
+        "memory_count": len(memories),
+        "summary": summary,
+    })

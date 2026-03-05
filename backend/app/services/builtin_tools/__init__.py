@@ -53,6 +53,7 @@ from app.services.builtin_tools.quests import (
 )
 from app.services.builtin_tools.relationships import (
     add_relationship,
+    get_entity_context,
     get_entity_relationships,
     query_relationships,
 )
@@ -129,4 +130,5 @@ BUILTIN_REGISTRY: dict[str, callable] = {
     "add_relationship": add_relationship,
     "query_relationships": query_relationships,
     "get_entity_relationships": get_entity_relationships,
+    "get_entity_context": get_entity_context,
 }

@@ -749,6 +749,15 @@ def _builtin_tool_defs() -> dict[str, dict]:
             "execution_type": "builtin",
             "execution_config": _config("get_entity_relationships"),
         },
+        "get_entity_context": {
+            "description": "Get a comprehensive context summary for any game entity. Compiles the entity's database record, knowledge graph relationships, and relevant memories into a single view. Use to understand everything known about a character, NPC, location, quest, or item.",
+            "parameters_schema": _schema(["entity_name"], {
+                "entity_name": {"type": "string", "description": "Name of the entity to look up"},
+                "entity_type": {"type": "string", "description": "Type: character, npc, location, quest, item. Auto-detected if empty."},
+            }),
+            "execution_type": "builtin",
+            "execution_config": _config("get_entity_context"),
+        },
     }
 
 
