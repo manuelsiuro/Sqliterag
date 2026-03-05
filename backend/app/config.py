@@ -78,6 +78,14 @@ class Settings(BaseSettings):
     memory_prefilter_enabled: bool = True
     memory_vec_overfetch_factor: float = 2.0
 
+    # MemGPT-style eviction (Phase 2.8)
+    memgpt_eviction_enabled: bool = True
+    memgpt_warning_threshold: float = 0.7
+    memgpt_flush_threshold: float = 0.95
+    memgpt_flush_target_pct: float = 0.5
+    memgpt_recall_importance: float = 0.6
+    memgpt_max_recall_tokens: int = 400
+
     # Server
     host: str = "0.0.0.0"
     port: int = 8000

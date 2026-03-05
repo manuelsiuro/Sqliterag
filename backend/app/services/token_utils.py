@@ -376,6 +376,7 @@ async def generate_summary(
     response = await llm_service.chat(
         model,
         [{"role": "user", "content": prompt}],
+        think=False,
         options={"num_predict": max_tokens + 100},
     )
     return (response.get("content") or "").strip()

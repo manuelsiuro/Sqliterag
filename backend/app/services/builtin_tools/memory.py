@@ -220,6 +220,48 @@ async def get_session_summary(
     })
 
 
+async def recall_context(
+    query: str,
+    *,
+    session: AsyncSession,
+    conversation_id: str,
+    embedding_service=None,
+) -> str:
+    """Search recall storage for evicted conversation messages."""
+    from app.services import memory_service
+
+    gs = await get_or_create_session(session, conversation_id)
+
+    results = await memory_service.search_with_stanford_scoring(
+        session,
+        query,
+        embedding_service=embedding_service,
+        session_id=gs.id,
+        memory_types=["recall"],
+    )
+
+    if not results:
+        return json.dumps({
+            "type": "recall_results",
+            "query": query,
+            "memories": [],
+            "count": 0,
+            "message": "No recalled context found for that query.",
+        })
+
+    memory_ids = [mid for mid, _score in results]
+    memories = await memory_service.get_memories_by_ids(session, memory_ids)
+
+    memory_list = [_memory_to_event(m) for m in memories]
+
+    return json.dumps({
+        "type": "recall_results",
+        "query": query,
+        "memories": memory_list,
+        "count": len(memory_list),
+    })
+
+
 async def end_session(
     summary_override: str = "",
     *,

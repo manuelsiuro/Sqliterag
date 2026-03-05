@@ -24,6 +24,7 @@ from app.services.token_utils import (
     estimate_tool_definitions_tokens,
     truncate_history,
 )
+from app.services.eviction_service import evict_and_store
 from app.services.prompt_builder import (
     GamePhase,
     RPG_TOOL_NAMES,
@@ -277,6 +278,18 @@ class ChatService:
                     preserve_recent=settings.history_preserve_recent,
                     threshold=settings.history_summarization_threshold,
                     max_summary_tokens=settings.history_summary_max_tokens,
+                )
+
+            # Phase 2.8: MemGPT-style eviction with recall storage
+            # Use smaller preserve_recent than Phase 1.2 so eviction can
+            # actually reclaim space after summarization already reduced to ~10 groups.
+            if settings.memgpt_eviction_enabled:
+                messages = await evict_and_store(
+                    messages, budget, self.llm_service, model,
+                    session=session,
+                    conversation_id=conversation_id,
+                    embedding_service=self.embedding_service,
+                    preserve_recent=max(4, settings.history_preserve_recent // 2),
                 )
 
             messages = truncate_history(messages, budget)

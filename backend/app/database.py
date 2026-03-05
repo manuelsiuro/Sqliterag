@@ -685,6 +685,14 @@ def _builtin_tool_defs() -> dict[str, dict]:
             "execution_type": "builtin",
             "execution_config": _config("get_session_summary"),
         },
+        "recall_context": {
+            "description": "Search recall storage for evicted conversation context. Use this when you need to remember something from earlier in the conversation that was archived due to context limits.",
+            "parameters_schema": _schema(["query"], {
+                "query": {"type": "string", "description": "Search query describing what to recall from earlier conversation."},
+            }),
+            "execution_type": "builtin",
+            "execution_config": _config("recall_context"),
+        },
         "end_session": {
             "description": "End the current game session. Generates a narrative summary of the session, archives it to memory, and marks the session as ended.",
             "parameters_schema": _schema([], {

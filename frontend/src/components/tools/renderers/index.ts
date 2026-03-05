@@ -79,5 +79,6 @@ registerToolRenderer("game_state", GameStateRenderer);
 import { MemoryRenderer } from "./MemoryRenderer";
 registerToolRenderer("memory_archived", MemoryRenderer);
 registerToolRenderer("memory_results", MemoryRenderer);
+registerToolRenderer("recall_results", MemoryRenderer);
 registerToolRenderer("session_summary", MemoryRenderer);
 registerToolRenderer("session_ended", MemoryRenderer);

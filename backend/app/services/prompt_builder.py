@@ -42,7 +42,7 @@ RPG_TOOL_NAMES = {
     # Game Session
     "init_game_session", "get_game_state",
     # Memory
-    "archive_event", "search_memory", "get_session_summary", "end_session",
+    "archive_event", "search_memory", "recall_context", "get_session_summary", "end_session",
 }
 
 # Static fallback — identical to the old RPG_SYSTEM_PROMPT
@@ -120,7 +120,7 @@ _CORE_TOOLS: frozenset[str] = frozenset({
     # Quests
     "create_quest", "update_quest_objective", "complete_quest", "get_quest_journal",
     # Memory
-    "archive_event", "search_memory", "get_session_summary", "end_session",
+    "archive_event", "search_memory", "recall_context", "get_session_summary", "end_session",
 })
 
 _PHASE_TOOLS: dict[GamePhase, frozenset[str]] = {

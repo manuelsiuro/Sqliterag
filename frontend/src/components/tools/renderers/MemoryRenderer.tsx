@@ -35,6 +35,15 @@ interface SessionSummaryData {
   error?: string;
 }
 
+interface RecallResultsData {
+  type: "recall_results";
+  query: string;
+  memories: MemoryEntry[];
+  count: number;
+  message?: string;
+  error?: string;
+}
+
 interface SessionEndedData {
   type: "session_ended";
   session_number: number;
@@ -175,6 +184,30 @@ function SummaryView({ d }: { d: SessionSummaryData }) {
   );
 }
 
+function RecallView({ d }: { d: RecallResultsData }) {
+  return (
+    <div className="bg-gray-800/30 rounded-lg px-3 py-2.5 border border-gray-700/30 space-y-2">
+      <div className="flex items-center gap-2">
+        <span className="text-base">&#x267B;&#xFE0F;</span>
+        <span className="text-sm font-medium text-gray-200">Recalled Context</span>
+        <span className="text-xs text-gray-500">&quot;{d.query}&quot;</span>
+        <span className="text-xs text-gray-500">({d.count} result{d.count !== 1 ? "s" : ""})</span>
+      </div>
+      {d.message && d.memories.length === 0 ? (
+        <p className="text-sm text-gray-500 italic">{d.message}</p>
+      ) : d.memories.length === 0 ? (
+        <p className="text-sm text-gray-500 italic">No recalled context found.</p>
+      ) : (
+        <div className="space-y-1.5">
+          {d.memories.map((entry, i) => (
+            <MemoryEntryCard key={i} entry={entry} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function EndedView({ d }: { d: SessionEndedData }) {
   return (
     <div className="bg-gray-800/30 rounded-lg px-3 py-2.5 border border-amber-700/30 space-y-2">
@@ -194,7 +227,7 @@ function EndedView({ d }: { d: SessionEndedData }) {
 }
 
 export function MemoryRenderer({ data }: ToolRendererProps) {
-  const d = data as MemoryArchivedData | MemoryResultsData | SessionSummaryData | SessionEndedData;
+  const d = data as MemoryArchivedData | MemoryResultsData | RecallResultsData | SessionSummaryData | SessionEndedData;
 
   if (d.error) {
     return <div className="mt-2 text-red-400 text-sm">{d.error}</div>;
@@ -205,6 +238,8 @@ export function MemoryRenderer({ data }: ToolRendererProps) {
       return <ArchivedView d={d as MemoryArchivedData} />;
     case "memory_results":
       return <ResultsView d={d as MemoryResultsData} />;
+    case "recall_results":
+      return <RecallView d={d as RecallResultsData} />;
     case "session_summary":
       return <SummaryView d={d as SessionSummaryData} />;
     case "session_ended":
