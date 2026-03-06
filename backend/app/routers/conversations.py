@@ -7,10 +7,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.config import settings
 from app.database import get_session
+from app.dependencies import get_ollama_service
 from app.exceptions import NotFoundError
 from app.models.conversation import Conversation
 from app.models.rpg import Campaign, Character, GameSession, InventoryItem, Item, Location, NPC, Quest
+from app.services.ollama_service import OllamaService
 from app.schemas.conversation import (
     ConversationCreate,
     ConversationRead,
@@ -110,6 +113,73 @@ async def delete_conversation(conversation_id: str, session: AsyncSession = Depe
 
     await session.delete(conv)
     await session.commit()
+
+
+@router.get("/{conversation_id}/recap")
+async def get_session_recap(
+    conversation_id: str,
+    session: AsyncSession = Depends(get_session),
+    llm_service: OllamaService = Depends(get_ollama_service),
+):
+    """Return a 'Previously on...' recap for a continued campaign session."""
+    if not settings.session_recap_enabled:
+        return None
+
+    result = await session.execute(
+        select(GameSession).where(GameSession.conversation_id == conversation_id)
+    )
+    gs = result.scalars().first()
+    if not gs or not gs.campaign_id or gs.session_number <= 1:
+        return None
+
+    # Get campaign name
+    camp_result = await session.execute(
+        select(Campaign).where(Campaign.id == gs.campaign_id)
+    )
+    camp = camp_result.scalars().first()
+    campaign_name = camp.name if camp else gs.world_name
+
+    # Return cached recap if available
+    if gs.session_recap:
+        return {
+            "type": "session_recap",
+            "campaign_name": campaign_name,
+            "session_number": gs.session_number,
+            "recap": gs.session_recap,
+            "narrative": True,
+        }
+
+    # Generate recap
+    from app.services import recap_service
+
+    # Get model from conversation
+    conv_result = await session.execute(
+        select(Conversation).where(Conversation.id == conversation_id)
+    )
+    conv = conv_result.scalars().first()
+    model = conv.model if conv and conv.model else settings.default_model
+
+    try:
+        recap_text = await recap_service.generate_session_recap(
+            db=session,
+            game_session=gs,
+            llm_service=llm_service,
+            model=model,
+        )
+    except Exception:
+        recap_text = ""
+
+    if recap_text:
+        gs.session_recap = recap_text
+        await session.commit()
+
+    return {
+        "type": "session_recap",
+        "campaign_name": campaign_name,
+        "session_number": gs.session_number,
+        "recap": recap_text or None,
+        "narrative": bool(recap_text),
+    }
 
 
 @router.get("/{conversation_id}/rpg/state")

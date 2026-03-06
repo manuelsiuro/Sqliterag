@@ -4,6 +4,7 @@ import { useCampaignStore } from "@/store/campaignStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useUIStore } from "@/store/uiStore";
 import { SessionDropdown } from "./SessionDropdown";
+import { api } from "@/services/api";
 
 export function TopBar() {
   const {
@@ -33,7 +34,15 @@ export function TopBar() {
     try {
       const newConvId = await continueCampaign(activeConv.campaign_id);
       await loadConversations();
-      selectConversation(newConvId);
+      await selectConversation(newConvId);
+      try {
+        const recap = await api.getSessionRecap(newConvId);
+        if (recap && recap.recap) {
+          useChatStore.getState().injectRecapMessage(recap);
+        }
+      } catch {
+        // Silent
+      }
     } catch (err) {
       console.error("Continue campaign failed:", err);
     }

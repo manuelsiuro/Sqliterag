@@ -450,7 +450,16 @@ export function GamePanel() {
     try {
       const newConvId = await continueCampaign(gameState.campaign.id);
       await loadConversations();
-      selectConversation(newConvId);
+      await selectConversation(newConvId);
+      // Inject recap after conversation loads
+      try {
+        const recap = await api.getSessionRecap(newConvId);
+        if (recap && recap.recap) {
+          useChatStore.getState().injectRecapMessage(recap);
+        }
+      } catch {
+        // Silent — recap is optional
+      }
     } catch (err) {
       console.error("Continue campaign failed:", err);
     }

@@ -224,6 +224,9 @@ export const api = {
   getGameState: (conversationId: string) =>
     request<Record<string, unknown> | null>(`/conversations/${conversationId}/rpg/state`),
 
+  getSessionRecap: (conversationId: string) =>
+    request<Record<string, unknown> | null>(`/conversations/${conversationId}/recap`),
+
   // Campaigns
   listCampaigns: (status?: string) =>
     request<Campaign[]>(`/campaigns${status ? `?status=${status}` : ""}`),

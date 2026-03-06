@@ -47,7 +47,7 @@ RPG_TOOL_NAMES = {
     "add_relationship", "query_relationships", "get_entity_relationships", "get_entity_context",
     "find_connections",
     # Campaign
-    "start_campaign", "list_campaigns",
+    "start_campaign", "list_campaigns", "session_recap",
     # Encounter Balancing
     "balance_encounter", "generate_monster", "award_xp",
 }
@@ -131,7 +131,7 @@ _CORE_TOOLS: frozenset[str] = frozenset({
     # Knowledge Graph (read)
     "query_relationships", "get_entity_relationships", "get_entity_context", "find_connections",
     # Campaign
-    "start_campaign", "list_campaigns",
+    "start_campaign", "list_campaigns", "session_recap",
 })
 
 _PHASE_TOOLS: dict[GamePhase, frozenset[str]] = {

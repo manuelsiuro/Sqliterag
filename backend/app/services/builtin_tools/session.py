@@ -146,6 +146,66 @@ async def start_campaign(
     })
 
 
+async def session_recap(
+    *,
+    session: AsyncSession,
+    conversation_id: str,
+    llm_service=None,
+) -> str:
+    """Generate a dramatic 'Previously on...' recap of prior campaign sessions."""
+    from app.config import settings
+
+    if not settings.session_recap_enabled:
+        return json.dumps({"type": "session_recap", "error": "Session recap is disabled."})
+
+    gs = await get_or_create_session(session, conversation_id)
+
+    if not gs.campaign_id or gs.session_number <= 1:
+        return json.dumps({"type": "session_recap", "error": "No previous sessions to recap."})
+
+    # Return cached if available
+    if gs.session_recap:
+        camp_result = await session.execute(select(Campaign).where(Campaign.id == gs.campaign_id))
+        camp = camp_result.scalars().first()
+        return json.dumps({
+            "type": "session_recap",
+            "campaign_name": camp.name if camp else gs.world_name,
+            "session_number": gs.session_number,
+            "recap": gs.session_recap,
+            "narrative": True,
+        })
+
+    # Generate recap
+    from app.services import recap_service
+
+    camp_result = await session.execute(select(Campaign).where(Campaign.id == gs.campaign_id))
+    camp = camp_result.scalars().first()
+    campaign_name = camp.name if camp else gs.world_name
+
+    model = settings.default_model
+    try:
+        recap_text = await recap_service.generate_session_recap(
+            db=session,
+            game_session=gs,
+            llm_service=llm_service,
+            model=model,
+        )
+    except Exception:
+        recap_text = ""
+
+    if recap_text:
+        gs.session_recap = recap_text
+        await session.flush()
+
+    return json.dumps({
+        "type": "session_recap",
+        "campaign_name": campaign_name,
+        "session_number": gs.session_number,
+        "recap": recap_text or None,
+        "narrative": bool(recap_text),
+    })
+
+
 async def list_campaigns_tool(
     *,
     session: AsyncSession,

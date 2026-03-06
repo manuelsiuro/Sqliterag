@@ -65,7 +65,7 @@ from app.services.builtin_tools.encounters import (
 )
 from app.services.builtin_tools.rest import long_rest, short_rest
 from app.services.builtin_tools.memory import archive_event, end_session, get_session_summary, recall_context, search_memory
-from app.services.builtin_tools.session import get_game_state, init_game_session, list_campaigns_tool, start_campaign
+from app.services.builtin_tools.session import get_game_state, init_game_session, list_campaigns_tool, session_recap, start_campaign
 from app.services.builtin_tools.world import (
     connect_locations,
     create_location,
@@ -128,6 +128,7 @@ BUILTIN_REGISTRY: dict[str, callable] = {
     "get_game_state": get_game_state,
     "start_campaign": start_campaign,
     "list_campaigns": list_campaigns_tool,
+    "session_recap": session_recap,
     # Phase 10 — Memory
     "archive_event": archive_event,
     "search_memory": search_memory,

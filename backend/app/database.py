@@ -210,6 +210,7 @@ async def _migrate_game_sessions_table(conn) -> None:
         ("session_number", "INTEGER DEFAULT 1"),
         ("status", "VARCHAR(20) DEFAULT 'active'"),
         ("session_summary", "TEXT"),
+        ("session_recap", "TEXT"),
     ]
     for col_name, col_type in columns_to_add:
         try:
@@ -825,6 +826,12 @@ def _builtin_tool_defs() -> dict[str, dict]:
             "parameters_schema": _schema([], {}),
             "execution_type": "builtin",
             "execution_config": _config("list_campaigns"),
+        },
+        "session_recap": {
+            "description": "Generate a dramatic 'Previously on...' recap of prior campaign sessions. Use when the player asks what happened last session or wants a recap.",
+            "parameters_schema": _schema([], {}),
+            "execution_type": "builtin",
+            "execution_config": _config("session_recap"),
         },
 
         # ── Phase 11: Knowledge Graph ───────────────────────────

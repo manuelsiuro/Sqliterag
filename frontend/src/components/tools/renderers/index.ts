@@ -104,3 +104,7 @@ import { EncounterRenderer } from "./EncounterRenderer";
 registerToolRenderer("encounter_balance", EncounterRenderer);
 registerToolRenderer("monster_generated", EncounterRenderer);
 registerToolRenderer("xp_reward", EncounterRenderer);
+
+// Phase 15 — Session Recap
+import { RecapRenderer } from "./RecapRenderer";
+registerToolRenderer("session_recap", RecapRenderer);

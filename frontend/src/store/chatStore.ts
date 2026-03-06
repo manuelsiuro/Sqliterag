@@ -24,6 +24,7 @@ interface ChatState {
   stopStreaming: () => void;
   clearError: () => void;
   setPendingInput: (text: string | null) => void;
+  injectRecapMessage: (recap: Record<string, unknown>) => void;
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
@@ -58,7 +59,29 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set({ isLoading: true, activeConversationId: id });
     try {
       const data = await api.getConversation(id);
-      set({ messages: data.messages, isLoading: false });
+      let msgs = data.messages;
+
+      // Auto-inject recap for empty campaign sessions
+      if (msgs.length === 0) {
+        try {
+          const recap = await api.getSessionRecap(id);
+          if (recap && recap.recap) {
+            const recapMsg: Message = {
+              id: "recap-" + id,
+              conversation_id: id,
+              role: "tool",
+              content: JSON.stringify(recap),
+              tool_name: "session_recap",
+              created_at: new Date().toISOString(),
+            };
+            msgs = [recapMsg, ...msgs];
+          }
+        } catch {
+          // Silent — recap is optional
+        }
+      }
+
+      set({ messages: msgs, isLoading: false });
     } catch (err) {
       set({
         error: err instanceof Error ? err.message : "Failed to load conversation",
@@ -209,4 +232,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
   clearError: () => set({ error: null }),
 
   setPendingInput: (text: string | null) => set({ pendingInput: text }),
+
+  injectRecapMessage: (recap: Record<string, unknown>) => {
+    const { activeConversationId, messages } = get();
+    if (!activeConversationId || !recap.recap) return;
+    // Avoid duplicates
+    if (messages.some((m) => m.id === "recap-" + activeConversationId)) return;
+    const recapMsg: Message = {
+      id: "recap-" + activeConversationId,
+      conversation_id: activeConversationId,
+      role: "tool",
+      content: JSON.stringify(recap),
+      tool_name: "session_recap",
+      created_at: new Date().toISOString(),
+    };
+    set((s) => ({ messages: [recapMsg, ...s.messages] }));
+  },
 }));

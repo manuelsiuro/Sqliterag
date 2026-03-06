@@ -48,6 +48,7 @@ class GameSession(Base):
     session_number: Mapped[int] = mapped_column(Integer, default=1)
     status: Mapped[str] = mapped_column(String(20), default="active")  # active | ended
     session_summary: Mapped[str | None] = mapped_column(Text, nullable=True)  # LLM narrative
+    session_recap: Mapped[str | None] = mapped_column(Text, nullable=True)  # "Previously on..." recap
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
     campaign: Mapped[Campaign | None] = relationship(back_populates="sessions")
