@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { Conversation, Message, ModelParameters } from "@/types";
 import { api } from "@/services/api";
 import { useSettingsStore } from "@/store/settingsStore";
+import { useToolStore } from "@/store/toolStore";
 import { useVisualizationStore } from "@/store/visualizationStore";
 
 interface ChatState {
@@ -26,6 +27,7 @@ interface ChatState {
   clearError: () => void;
   setPendingInput: (text: string | null) => void;
   injectRecapMessage: (recap: Record<string, unknown>) => void;
+  startDnDGame: () => Promise<void>;
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
@@ -252,5 +254,44 @@ export const useChatStore = create<ChatState>((set, get) => ({
       created_at: new Date().toISOString(),
     };
     set((s) => ({ messages: [recapMsg, ...s.messages] }));
+  },
+
+  startDnDGame: async () => {
+    const defaultModel = useSettingsStore.getState().localModels[0]?.name;
+    if (!defaultModel) {
+      set({ error: "No models available. Install a model in Ollama first." });
+      return;
+    }
+
+    try {
+      const conv = await get().createConversation(defaultModel);
+      await get().updateConversationTitle(conv.id, "D&D Adventure");
+
+      // Enable all tools for this conversation
+      const toolStore = useToolStore.getState();
+      if (toolStore.tools.length === 0) {
+        await toolStore.loadTools();
+      }
+      const allToolIds = useToolStore.getState().tools.map((t) => t.id);
+      if (allToolIds.length > 0) {
+        await toolStore.setConversationToolsBatch(conv.id, allToolIds);
+      }
+
+      const prompt = `Start a new D&D 5e adventure for me. Use tools in this order — batch calls when possible:
+
+1. init_game_session — create a world with a creative fantasy name
+2. create_character — level 1 hero, interesting race/class, standard array stats (15,14,13,12,10,8)
+3. create_item (2-3x) — class-appropriate weapon, armor, and one adventuring item
+4. give_item for each item, then equip_item for weapon and armor
+5. create_location — evocative starting location
+6. set_environment — time, weather, season
+7. create_quest — compelling hook, 2-3 objectives, XP/gold rewards
+
+After setup, write an immersive intro: world, character backstory, scene, quest hook. End with 2-3 choices.`;
+
+      get().sendMessage(prompt);
+    } catch (err) {
+      set({ error: err instanceof Error ? err.message : "Failed to start D&D game" });
+    }
   },
 }));
