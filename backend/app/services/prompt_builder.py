@@ -210,9 +210,10 @@ _COMBAT_RULES = (
 
 _SOCIAL_RULES = (
     "SOCIAL PHASE:\n"
-    "- Use talk_to_npc for NPC dialogue. Respect NPC disposition and familiarity.\n"
-    "- Use update_npc_relationship to track changes in NPC attitudes.\n"
-    "- Role-play NPC personalities consistently.\n"
+    "- Use talk_to_npc for dialogue — it returns a detailed roleplay_hint with personality, memories, and relationships.\n"
+    "- Follow the roleplay_hint closely: match the NPC's voice, traits, and disposition in dialogue.\n"
+    "- Reference NPC memories when relevant to the conversation topic.\n"
+    "- Use update_npc_relationship when disposition changes.\n"
 )
 
 _EXPLORATION_RULES = (
@@ -391,9 +392,19 @@ async def _build_layer3_state(
         )
         npcs = result.scalars().all()
         if npcs:
+            npc_parts = []
             for n in npcs:
                 entity_names[("npc", n.id)] = n.name
-            npcs_text = ", ".join(f"{n.name} ({n.disposition})" for n in npcs)
+                traits_str = ""
+                try:
+                    p = json.loads(n.personality) if n.personality else {}
+                    traits = p.get("traits", [])[:2]
+                    if traits:
+                        traits_str = f", {'/'.join(traits)}"
+                except (json.JSONDecodeError, TypeError, AttributeError):
+                    pass
+                npc_parts.append(f"{n.name} ({n.disposition}{traits_str})")
+            npcs_text = ", ".join(npc_parts)
     parts.append(f"NPCs here: {npcs_text}")
 
     # Environment + Combat

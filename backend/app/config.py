@@ -119,6 +119,12 @@ class Settings(BaseSettings):
     campaign_enabled: bool = True
     campaign_recap_max_sessions: int = 3
 
+    # NPC personality via memory (Phase 5.3)
+    npc_personality_enabled: bool = True
+    npc_memory_search_top_k: int = 3
+    npc_max_local_memories: int = 5
+    npc_max_relationship_hints: int = 4
+
     # Server
     host: str = "0.0.0.0"
     port: int = 8000

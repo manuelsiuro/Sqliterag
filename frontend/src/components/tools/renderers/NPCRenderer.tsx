@@ -14,6 +14,15 @@ interface NPCData {
   changes?: string[];
   is_party_member?: boolean;
   error?: string;
+  // Phase 5.3
+  personality?: {
+    traits?: string[];
+    voice?: string;
+    motivation?: string;
+    secrets?: string[];
+  };
+  backstory?: string;
+  relationships?: string[];
 }
 
 const DISPOSITION_SCALE = ["hostile", "unfriendly", "neutral", "friendly", "helpful"];
@@ -93,6 +102,29 @@ export function NPCRenderer({ data }: ToolRendererProps) {
         </div>
       )}
 
+      {/* Personality Traits */}
+      {d.personality?.traits && d.personality.traits.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {d.personality.traits.slice(0, 5).map((trait, i) => (
+            <span key={i} className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-900/25 text-purple-300 border border-purple-700/25">
+              {trait}
+            </span>
+          ))}
+          {d.personality.voice && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-900/25 text-indigo-300 border border-indigo-700/25">
+              {d.personality.voice}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Backstory */}
+      {d.backstory && (
+        <div className="text-[10px] text-gray-500 bg-gray-800/30 rounded px-2 py-1 border border-gray-700/20">
+          {d.backstory.length > 120 ? d.backstory.slice(0, 117) + "..." : d.backstory}
+        </div>
+      )}
+
       {/* Disposition meter */}
       <div>
         <div className="flex justify-between text-[10px] text-gray-500 mb-0.5">
@@ -118,6 +150,18 @@ export function NPCRenderer({ data }: ToolRendererProps) {
           <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-900/30 text-amber-300 border border-amber-700/30">
             {d.topic}
           </span>
+        </div>
+      )}
+
+      {/* Relationships */}
+      {d.relationships && d.relationships.length > 0 && (
+        <div className="space-y-0.5">
+          <div className="text-[10px] text-gray-500 font-medium">Relationships</div>
+          {d.relationships.slice(0, 4).map((r, i) => (
+            <div key={i} className="text-[11px] text-cyan-300/70 pl-2 border-l-2 border-cyan-700/30">
+              {r}
+            </div>
+          ))}
         </div>
       )}
 

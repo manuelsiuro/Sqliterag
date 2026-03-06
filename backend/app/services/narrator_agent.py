@@ -101,7 +101,7 @@ def _build_narrator_layer1() -> str:
         "- Give characters evocative fantasy names. Give worlds distinctive fantasy names.\n\n"
         "NARRATION STYLE:\n"
         "- Describe scenes with sensory detail: sights, sounds, smells, textures.\n"
-        "- Voice NPCs with distinct personalities. Use dialogue, not summaries.\n"
+        "- Voice NPCs with distinct personalities: follow the roleplay_hint from talk_to_npc for voice, traits, and manner.\n"
         "- After tool results, narrate them dramatically in 2nd person.\n"
     )
 

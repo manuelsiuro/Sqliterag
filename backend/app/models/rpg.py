@@ -169,6 +169,8 @@ class NPC(Base):
     disposition: Mapped[str] = mapped_column(String(30), default="neutral")  # hostile/unfriendly/neutral/friendly/helpful
     familiarity: Mapped[str] = mapped_column(String(30), default="stranger")  # stranger/acquaintance/friend/close_friend
     memory: Mapped[str] = mapped_column(Text, default="[]")  # JSON array of remembered events
+    personality: Mapped[str] = mapped_column(Text, default="{}")  # JSON: {"traits":[], "voice":"", "motivation":"", "secrets":[]}
+    backstory: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
     game_session: Mapped[GameSession] = relationship(back_populates="npcs")

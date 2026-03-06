@@ -85,7 +85,7 @@ def _build_archivist_layer1() -> str:
         "outcomes, player decisions.\n"
         "- Use add_relationship to track connections between characters, NPCs, "
         "locations, quests.\n"
-        "- Use npc_remember to record events NPCs witnessed or participated in.\n"
+        "- Use npc_remember to record events NPCs witnessed AND their emotional reactions.\n"
         "- Use update_npc_relationship when NPC attitudes changed.\n"
         "- Use update_quest_objective when quest progress was made.\n\n"
         "RULES:\n"

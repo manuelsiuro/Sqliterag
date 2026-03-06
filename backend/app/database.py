@@ -194,6 +194,7 @@ async def init_db() -> None:
         await _migrate_messages_table(conn)
         await _migrate_game_sessions_table(conn)
         await _migrate_campaigns_table(conn)
+        await _migrate_npcs_personality(conn)
 
     # If fts_memories is empty but game_memories has rows, rebuild the FTS index
     await _sync_fts_on_startup()
@@ -235,6 +236,19 @@ async def _migrate_campaigns_table(conn) -> None:
         ))
     except Exception:
         pass
+
+
+async def _migrate_npcs_personality(conn) -> None:
+    """Add personality and backstory columns to rpg_npcs (Phase 5.3, idempotent)."""
+    for col_name, col_type in [
+        ("personality", "TEXT DEFAULT '{}'"),
+        ("backstory", "TEXT DEFAULT ''"),
+    ]:
+        try:
+            await conn.execute(text(f"ALTER TABLE rpg_npcs ADD COLUMN {col_name} {col_type}"))
+            logger.info("Added column rpg_npcs.%s", col_name)
+        except Exception:
+            pass  # Column already exists
 
 
 async def _migrate_messages_table(conn) -> None:
@@ -634,10 +648,12 @@ def _builtin_tool_defs() -> dict[str, dict]:
 
         # ── Phase 6: NPC System ──────────────────────────────────
         "create_npc": {
-            "description": "Create a new NPC with a name, description, location, and disposition.",
+            "description": "Create a new NPC with name, description, personality traits, backstory, location, and disposition.",
             "parameters_schema": _schema(["name"], {
                 "name": {"type": "string", "description": "NPC name."},
-                "description": {"type": "string", "description": "NPC description and personality."},
+                "description": {"type": "string", "description": "Physical appearance and notable features."},
+                "personality": {"type": "string", "description": "Personality as JSON '{\"traits\":[\"gruff\",\"loyal\"],\"voice\":\"gravelly\",\"motivation\":\"protect village\"}' or comma-separated 'gruff, loyal, suspicious'."},
+                "backstory": {"type": "string", "description": "NPC's history and background."},
                 "location": {"type": "string", "description": "Location name where the NPC is placed."},
                 "disposition": {"type": "string", "description": "Attitude: hostile, unfriendly, neutral, friendly, helpful. Default: neutral."},
             }),
@@ -645,7 +661,7 @@ def _builtin_tool_defs() -> dict[str, dict]:
             "execution_config": _config("create_npc"),
         },
         "talk_to_npc": {
-            "description": "Initiate conversation with an NPC. Returns their context, memories, and roleplay guidance.",
+            "description": "Initiate conversation with an NPC. Returns personality profile, memories, relationships, and detailed roleplay guidance.",
             "parameters_schema": _schema(["npc_name"], {
                 "npc_name": {"type": "string", "description": "NPC to talk to."},
                 "topic": {"type": "string", "description": "Conversation topic or question."},
