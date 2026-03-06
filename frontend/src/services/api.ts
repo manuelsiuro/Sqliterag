@@ -8,10 +8,14 @@ import type {
   DatabaseInfo,
   Document,
   DocumentUploadResponse,
+  GraphEdge,
+  GraphNode,
   LocalModel,
+  MemoryItem,
   ModelDetail,
   ModelParameters,
   ModelSearchResult,
+  TokenBudgetSnapshot,
   ToolCallEvent,
   ToolCreate,
   ToolDefinition,
@@ -64,6 +68,7 @@ export const api = {
     parameters?: ModelParameters,
     onToolCall?: (data: ToolCallEvent) => void,
     onToolResult?: (data: ToolResultEvent) => void,
+    onBudget?: (data: TokenBudgetSnapshot) => void,
   ) => {
     const ctrl = new AbortController();
     fetchEventSource(`${BASE_URL}/chat/${conversationId}`, {
@@ -90,6 +95,8 @@ export const api = {
           console.debug("PALADIN self-correction:", JSON.parse(ev.data));
         } else if (ev.event === "agent_done") {
           console.debug("Agent done:", JSON.parse(ev.data));
+        } else if (ev.event === "budget") {
+          onBudget?.(JSON.parse(ev.data) as TokenBudgetSnapshot);
         } else if (ev.event === "error") {
           const data = JSON.parse(ev.data);
           onError(new Error(data.error || "Stream failed"));
@@ -253,4 +260,27 @@ export const api = {
       `/campaigns/${campaignId}/continue`,
       { method: "POST" },
     ),
+
+  // Visualization (Phase 5.6)
+  getMemories: (conversationId: string, params?: { type?: string; entity_type?: string; limit?: number; offset?: number }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.type) searchParams.set("type", params.type);
+    if (params?.entity_type) searchParams.set("entity_type", params.entity_type);
+    if (params?.limit) searchParams.set("limit", String(params.limit));
+    if (params?.offset) searchParams.set("offset", String(params.offset));
+    const qs = searchParams.toString();
+    return request<{ memories: MemoryItem[]; total: number; types_summary: Record<string, number> }>(
+      `/conversations/${conversationId}/rpg/memories${qs ? `?${qs}` : ""}`
+    );
+  },
+
+  getGraph: (conversationId: string, params?: { min_strength?: number }) => {
+    const qs = params?.min_strength ? `?min_strength=${params.min_strength}` : "";
+    return request<{ nodes: GraphNode[]; edges: GraphEdge[] }>(
+      `/conversations/${conversationId}/rpg/graph${qs}`
+    );
+  },
+
+  getBudget: (conversationId: string) =>
+    request<TokenBudgetSnapshot | null>(`/conversations/${conversationId}/rpg/budget`),
 };

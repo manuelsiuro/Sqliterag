@@ -175,3 +175,47 @@ export interface ToolResultEvent {
   message_id: string;
   agent?: string;
 }
+
+// Phase 5.6 — Visualization types
+export interface MemoryItem {
+  id: string;
+  memory_type: string;
+  entity_type: string | null;
+  content: string;
+  importance_score: number;
+  entity_names: string[];
+  session_number: number | null;
+  created_at: string;
+}
+
+export interface GraphNode {
+  id: string;
+  name: string;
+  type: string;
+  entity_id: string;
+}
+
+export interface GraphEdge {
+  source_id: string;
+  target_id: string;
+  relationship: string;
+  strength: number;
+  source_type: string;
+  target_type: string;
+}
+
+export interface TokenBudgetSnapshot {
+  num_ctx: number;
+  system_prompt_tokens: number;
+  rag_context_tokens: number;
+  tool_definitions_tokens: number;
+  conversation_history_tokens: number;
+  response_reserve: number;
+  safety_buffer: number;
+  total_input_tokens: number;
+  input_budget: number;
+  utilization_pct: number;
+  tokens_remaining: number;
+  summarized_message_count: number;
+  truncated_message_count: number;
+}

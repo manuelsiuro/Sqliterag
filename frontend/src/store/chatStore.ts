@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { Conversation, Message, ModelParameters } from "@/types";
 import { api } from "@/services/api";
 import { useSettingsStore } from "@/store/settingsStore";
+import { useVisualizationStore } from "@/store/visualizationStore";
 
 interface ChatState {
   conversations: Conversation[];
@@ -199,6 +200,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
         set((s) => ({
           messages: [...s.messages, toolResultMsg],
         }));
+      },
+      // onBudget (Phase 5.6)
+      (data) => {
+        useVisualizationStore.getState().setBudget(data);
       },
     );
     set({ abortController: ctrl });

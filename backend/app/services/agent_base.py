@@ -139,6 +139,11 @@ class SingleAgent(BaseAgent):
         ctx.messages = truncate_history(ctx.messages, ctx.budget)
         ctx.budget.log_summary()
 
+        # Emit budget snapshot for frontend visualization (Phase 5.6)
+        yield ServerSentEvent(
+            data=json.dumps(ctx.budget.to_dict()), event="budget"
+        )
+
         kwargs: dict = {"think": False}
         if ctx.options:
             kwargs["options"] = ctx.options

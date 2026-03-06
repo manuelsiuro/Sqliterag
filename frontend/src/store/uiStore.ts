@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-type ModalId = "settings" | "tools" | "database" | null;
+type ModalId = "settings" | "tools" | "database" | "knowledge-graph" | null;
 
 interface UIState {
   sidebarCollapsed: boolean;
@@ -10,6 +10,8 @@ interface UIState {
   closeModal: () => void;
   sessionDropdownOpen: boolean;
   setSessionDropdownOpen: (open: boolean) => void;
+  gamePanelTab: "game" | "memory" | "insights";
+  setGamePanelTab: (tab: "game" | "memory" | "insights") => void;
 }
 
 const SIDEBAR_KEY = "sidebar-collapsed";
@@ -33,4 +35,7 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   sessionDropdownOpen: false,
   setSessionDropdownOpen: (open) => set({ sessionDropdownOpen: open }),
+
+  gamePanelTab: "game",
+  setGamePanelTab: (tab) => set({ gamePanelTab: tab }),
 }));

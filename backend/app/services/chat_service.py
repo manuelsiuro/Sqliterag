@@ -137,6 +137,10 @@ class ChatService:
         self.tool_service = tool_service
         self.embedding_service = embedding_service
         self.orchestrator = orchestrator
+        self._budget_cache: dict[str, dict] = {}
+
+    def get_cached_budget(self, conversation_id: str) -> dict | None:
+        return self._budget_cache.get(conversation_id)
 
     async def stream_chat(
         self,
@@ -285,10 +289,16 @@ class ChatService:
                 agent = SingleAgent()
                 async for event in agent.run(ctx):
                     yield event
+            self._budget_cache[conversation_id] = ctx.budget.to_dict()
         else:
             # === Original streaming path (no tools) ===
             messages = truncate_history(messages, budget)
             budget.log_summary()
+            # Emit budget for frontend visualization (Phase 5.6)
+            yield ServerSentEvent(
+                data=json.dumps(budget.to_dict()), event="budget"
+            )
+            self._budget_cache[conversation_id] = budget.to_dict()
             full_response = ""
             try:
                 async for token in self.llm_service.chat_stream(model, messages, **kwargs):

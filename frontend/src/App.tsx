@@ -8,6 +8,7 @@ import { DatabasePanel } from "@/components/database";
 import { ToolsPanel } from "@/components/tools";
 import { DocumentList } from "@/components/documents";
 import { GamePanel } from "@/components/rpg/GamePanel";
+import { KnowledgeGraphModal } from "@/components/rpg/KnowledgeGraphModal";
 import { useChatStore } from "@/store/chatStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useUIStore } from "@/store/uiStore";
@@ -16,6 +17,7 @@ const MODAL_TITLES: Record<string, string> = {
   settings: "Settings",
   tools: "Tools",
   database: "Database",
+  "knowledge-graph": "Knowledge Graph",
 };
 
 function App() {
@@ -57,6 +59,7 @@ function App() {
           )}
           {activeModal === "tools" && <ToolsPanel />}
           {activeModal === "database" && <DatabasePanel />}
+          {activeModal === "knowledge-graph" && <KnowledgeGraphModal />}
         </Modal>
       )}
 

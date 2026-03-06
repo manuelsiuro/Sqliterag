@@ -146,6 +146,23 @@ class TokenBudget:
                 self.input_budget,
             )
 
+    def to_dict(self) -> dict:
+        return {
+            "num_ctx": self.num_ctx,
+            "system_prompt_tokens": self.system_prompt_tokens,
+            "rag_context_tokens": self.rag_context_tokens,
+            "tool_definitions_tokens": self.tool_definitions_tokens,
+            "conversation_history_tokens": self.conversation_history_tokens,
+            "response_reserve": self.response_reserve,
+            "safety_buffer": self.safety_buffer,
+            "total_input_tokens": self.total_input_tokens,
+            "input_budget": self.input_budget,
+            "utilization_pct": round(self.utilization_pct, 1),
+            "tokens_remaining": self.tokens_remaining,
+            "summarized_message_count": self.summarized_message_count,
+            "truncated_message_count": self.truncated_message_count,
+        }
+
 
 # ---------------------------------------------------------------------------
 # Conversation history truncation

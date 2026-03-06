@@ -133,6 +133,11 @@ class Settings(BaseSettings):
     encounter_balancing_enabled: bool = True
     encounter_auto_difficulty: bool = True
 
+    # Frontend visualization (Phase 5.6)
+    visualization_enabled: bool = True
+    visualization_memory_page_size: int = 50
+    visualization_graph_max_nodes: int = 100
+
     # Server
     host: str = "0.0.0.0"
     port: int = 8000

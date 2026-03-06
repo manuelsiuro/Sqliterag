@@ -1,7 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { useChatStore } from "@/store/chatStore";
 import { useCampaignStore } from "@/store/campaignStore";
+import { useUIStore } from "@/store/uiStore";
 import { api } from "@/services/api";
+import { MemoryBrowser } from "./MemoryBrowser";
+import { InsightsPanel } from "./InsightsPanel";
 
 interface AbilityScore {
   score: number;
@@ -468,6 +471,13 @@ export function GamePanel() {
   const playerChars = gameState?.characters.filter(c => c.is_player) || [];
   const creatures = gameState?.characters.filter(c => !c.is_player) || [];
 
+  const { gamePanelTab, setGamePanelTab } = useUIStore();
+  const tabs = [
+    { id: "game" as const, label: "Game" },
+    { id: "memory" as const, label: "Memory" },
+    { id: "insights" as const, label: "Insights" },
+  ];
+
   return (
     <div className="w-80 bg-gray-900 border-l border-gray-800 flex flex-col h-full overflow-hidden">
       {/* Header */}
@@ -477,6 +487,25 @@ export function GamePanel() {
           <h2 className="text-sm font-bold text-amber-200">RPG Dashboard</h2>
         </div>
       </div>
+
+      {/* Tab bar — only when game state exists */}
+      {gameState && (
+        <div className="flex gap-1 px-3 py-2 border-b border-gray-800">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setGamePanelTab(tab.id)}
+              className={`flex-1 text-[11px] py-1 rounded-md font-medium transition-colors ${
+                gamePanelTab === tab.id
+                  ? "bg-amber-900/40 text-amber-300 border border-amber-700/30"
+                  : "text-gray-500 hover:text-gray-300 border border-transparent"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto p-3 space-y-4">
         {loading ? (
@@ -491,6 +520,10 @@ export function GamePanel() {
               &ldquo;start a game session&rdquo; to begin!
             </div>
           </div>
+        ) : gamePanelTab === "memory" ? (
+          <MemoryBrowser />
+        ) : gamePanelTab === "insights" ? (
+          <InsightsPanel />
         ) : (
           <>
             {/* Campaign */}
