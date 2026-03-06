@@ -223,7 +223,14 @@ async def get_rpg_state(conversation_id: str, session: AsyncSession = Depends(ge
         result = await session.execute(select(Location).where(Location.id == gs.current_location_id))
         loc = result.scalars().first()
         if loc:
-            current_loc = {"name": loc.name, "description": loc.description, "biome": loc.biome}
+            exits_raw = json.loads(loc.exits) if loc.exits else {}
+            exit_names: dict[str, str] = {}
+            for dir_name, loc_id in exits_raw.items():
+                r = await session.execute(select(Location.name).where(Location.id == loc_id))
+                loc_name = r.scalar()
+                if loc_name:
+                    exit_names[dir_name] = loc_name
+            current_loc = {"name": loc.name, "description": loc.description, "biome": loc.biome, "exits": exit_names}
 
     # Active quests
     result = await session.execute(
@@ -241,15 +248,21 @@ async def get_rpg_state(conversation_id: str, session: AsyncSession = Depends(ge
 
     # NPCs
     result = await session.execute(select(NPC).where(NPC.session_id == gs.id))
-    npcs = [
-        {
+    npcs = []
+    for n in result.scalars().all():
+        npc_data: dict = {
             "name": n.name,
             "disposition": n.disposition,
             "familiarity": n.familiarity,
             "description": n.description or "",
         }
-        for n in result.scalars().all()
-    ]
+        if n.personality:
+            try:
+                personality = json.loads(n.personality)
+                npc_data["personality_traits"] = personality.get("traits", [])[:3]
+            except (json.JSONDecodeError, TypeError):
+                pass
+        npcs.append(npc_data)
 
     # Combat & environment
     combat = json.loads(gs.combat_state) if gs.combat_state else None

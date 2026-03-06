@@ -1,4 +1,5 @@
 import type { ToolRendererProps } from "./toolRendererRegistry";
+import { RACE_ICONS } from "@/constants/rpg";
 
 interface CharSummary {
   name: string;
@@ -16,13 +17,6 @@ interface CharListData {
   characters: CharSummary[];
   count: number;
 }
-
-const RACE_ICONS: Record<string, string> = {
-  human: "\uD83D\uDC64", elf: "\uD83E\uDDDD", dwarf: "\u26CF\uFE0F",
-  halfling: "\uD83E\uDDB6", gnome: "\uD83D\uDD27", "half-elf": "\uD83C\uDF1F",
-  "half-orc": "\uD83D\uDCAA", tiefling: "\uD83D\uDD25", dragonborn: "\uD83D\uDC09",
-  orc: "\uD83D\uDC79",
-};
 
 export function CharacterListRenderer({ data }: ToolRendererProps) {
   const { characters, count } = data as unknown as CharListData;

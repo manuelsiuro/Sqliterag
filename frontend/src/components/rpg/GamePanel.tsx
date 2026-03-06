@@ -5,6 +5,13 @@ import { useUIStore } from "@/store/uiStore";
 import { api } from "@/services/api";
 import { MemoryBrowser } from "./MemoryBrowser";
 import { InsightsPanel } from "./InsightsPanel";
+import {
+  BIOME_ICONS, TIME_ICONS, WEATHER_ICONS, SEASON_ICONS,
+  RACE_ICONS, CLASS_ICONS, ABILITY_ABBR,
+  RARITY_COLORS, RARITY_BORDER, TYPE_ICONS,
+  DISPOSITION_COLORS, FAMILIARITY_ICONS, DIR_ARROWS,
+  capitalize,
+} from "@/constants/rpg";
 
 interface AbilityScore {
   score: number;
@@ -66,6 +73,7 @@ interface NPCState {
   disposition: string;
   familiarity: string;
   description: string;
+  personality_traits?: string[];
 }
 
 interface CampaignInfo {
@@ -78,7 +86,7 @@ interface CampaignInfo {
 interface GameState {
   world_name: string;
   characters: CharacterState[];
-  current_location: { name: string; description: string; biome: string } | null;
+  current_location: { name: string; description: string; biome: string; exits?: Record<string, string> } | null;
   active_quests: QuestState[];
   npcs: NPCState[];
   in_combat: boolean;
@@ -95,79 +103,12 @@ const DIFFICULTY_PILL_STYLES: Record<string, { bg: string; text: string; border:
   deadly: { bg: "bg-red-900/30",    text: "text-red-300",    border: "border-red-700/40" },
 };
 
-const BIOME_ICONS: Record<string, string> = {
-  town: "\uD83C\uDFD8\uFE0F", village: "\uD83C\uDFE1", forest: "\uD83C\uDF32",
-  dungeon: "\uD83D\uDD73\uFE0F", cave: "\u26F0\uFE0F", mountain: "\uD83C\uDFD4\uFE0F",
-  desert: "\uD83C\uDFDC\uFE0F", ocean: "\uD83C\uDF0A", castle: "\uD83C\uDFF0", tavern: "\uD83C\uDF7A",
-};
-
-const TIME_ICONS: Record<string, string> = {
-  dawn: "\uD83C\uDF05", morning: "\uD83C\uDF04", day: "\u2600\uFE0F", noon: "\uD83C\uDF1E",
-  afternoon: "\uD83C\uDF24\uFE0F", dusk: "\uD83C\uDF07", evening: "\uD83C\uDF06",
-  night: "\uD83C\uDF19", midnight: "\uD83C\uDF11",
-};
-const WEATHER_ICONS: Record<string, string> = {
-  clear: "\u2600\uFE0F", cloudy: "\u2601\uFE0F", overcast: "\uD83C\uDF25\uFE0F",
-  rain: "\uD83C\uDF27\uFE0F", storm: "\u26C8\uFE0F", snow: "\u2744\uFE0F",
-  fog: "\uD83C\uDF2B\uFE0F", wind: "\uD83D\uDCA8",
-};
-const SEASON_ICONS: Record<string, string> = {
-  spring: "\uD83C\uDF38", summer: "\uD83C\uDF3B", autumn: "\uD83C\uDF42",
-  fall: "\uD83C\uDF42", winter: "\u2744\uFE0F",
-};
-
-const RACE_ICONS: Record<string, string> = {
-  human: "\uD83D\uDC64", elf: "\uD83E\uDDDD", dwarf: "\u26CF\uFE0F",
-  halfling: "\uD83E\uDDB6", gnome: "\uD83D\uDD27", "half-elf": "\uD83C\uDF1F",
-  "half-orc": "\uD83D\uDCAA", tiefling: "\uD83D\uDD25", dragonborn: "\uD83D\uDC09",
-  orc: "\uD83D\uDC79",
-};
-
-const CLASS_ICONS: Record<string, string> = {
-  fighter: "\u2694\uFE0F", wizard: "\uD83E\uDE84", rogue: "\uD83D\uDDE1\uFE0F",
-  cleric: "\u2695\uFE0F", ranger: "\uD83C\uDFF9", paladin: "\uD83D\uDEE1\uFE0F",
-  barbarian: "\uD83E\uDE93", bard: "\uD83C\uDFB6", druid: "\uD83C\uDF3F",
-  monk: "\u270A", sorcerer: "\u2728", warlock: "\uD83D\uDD2E",
-};
-
-const RARITY_COLORS: Record<string, string> = {
-  common: "text-gray-400", uncommon: "text-green-400", rare: "text-blue-400",
-  "very rare": "text-purple-400", legendary: "text-amber-400", artifact: "text-red-400",
-};
-
-const RARITY_BORDER: Record<string, string> = {
-  common: "border-l-gray-600", uncommon: "border-l-green-500", rare: "border-l-blue-500",
-  "very rare": "border-l-purple-500", legendary: "border-l-amber-400", artifact: "border-l-red-500",
-};
-
-const DISPOSITION_COLORS: Record<string, string> = {
-  hostile: "text-red-400 bg-red-900/30 border-red-700/30",
-  unfriendly: "text-orange-400 bg-orange-900/30 border-orange-700/30",
-  neutral: "text-gray-400 bg-gray-800/50 border-gray-600/30",
-  friendly: "text-green-400 bg-green-900/30 border-green-700/30",
-  helpful: "text-emerald-400 bg-emerald-900/30 border-emerald-700/30",
-};
-
-const TYPE_ICONS: Record<string, string> = {
-  weapon: "\u2694\uFE0F", armor: "\uD83D\uDEE1\uFE0F", consumable: "\uD83E\uDDEA",
-  quest: "\uD83D\uDCDC", scroll: "\uD83D\uDCDC", misc: "\uD83C\uDF92",
-  potion: "\uD83E\uDDEA", shield: "\uD83D\uDEE1\uFE0F", ring: "\uD83D\uDC8D",
-  wand: "\uD83E\uDE84", staff: "\uD83E\uDE84", amulet: "\uD83D\uDCAE",
-};
-
-const ABILITY_ABBR: Record<string, string> = {
-  strength: "STR", dexterity: "DEX", constitution: "CON",
-  intelligence: "INT", wisdom: "WIS", charisma: "CHA",
-};
-
-function capitalize(s: string) {
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
 function CharacterCard({ c }: { c: CharacterState }) {
   const hpPct = Math.max(0, (c.current_hp / Math.max(c.max_hp, 1)) * 100);
+  const hpGradient = hpPct > 50 ? "from-emerald-500 to-emerald-400" : hpPct > 25 ? "from-yellow-500 to-amber-400" : "from-red-500 to-red-400";
   const raceIcon = RACE_ICONS[c.race.toLowerCase()] || "\uD83D\uDC64";
   const classIcon = CLASS_ICONS[c.class.toLowerCase()] || "\u2694\uFE0F";
+  const xpPct = c.xp_next_level ? Math.max(0, Math.min(100, (c.xp / c.xp_next_level) * 100)) : 0;
 
   return (
     <div
@@ -195,25 +136,31 @@ function CharacterCard({ c }: { c: CharacterState }) {
         </span>
       </div>
 
-      {/* Row 3: AC + Speed */}
-      <div className="flex items-center gap-3 mt-1.5">
+      {/* Row 3: AC + Speed + Prof + Hit Die */}
+      <div className="flex items-center gap-2 mt-1.5 flex-wrap">
         <div className="flex items-center gap-1">
-          <span className="text-[10px] text-gray-500">AC</span>
+          <span className="text-[11px]">{"\uD83D\uDEE1\uFE0F"}</span>
           <span className="text-xs font-bold text-blue-300">{c.armor_class}</span>
         </div>
         <div className="flex items-center gap-1">
           <span className="text-[10px] text-gray-500">SPD</span>
           <span className="text-xs font-medium text-gray-300">{c.speed}ft</span>
         </div>
+        <span className="text-[9px] px-1.5 py-px rounded-full bg-purple-900/40 text-purple-300 border border-purple-700/30">
+          Prof +{c.proficiency_bonus}
+        </span>
+        {c.hit_die && (
+          <span className="text-[9px] px-1.5 py-px rounded-full bg-gray-800/60 text-gray-400 border border-gray-700/30">
+            {c.hit_die}
+          </span>
+        )}
       </div>
 
       {/* Row 4: HP bar */}
       <div className="flex items-center gap-2 mt-1.5">
-        <div className="flex-1 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+        <div className="flex-1 h-2.5 bg-gray-700 rounded-full overflow-hidden border border-gray-700">
           <div
-            className={`h-full rounded-full transition-all ${
-              hpPct > 50 ? "bg-emerald-500" : hpPct > 25 ? "bg-yellow-500" : "bg-red-500"
-            }`}
+            className={`h-full rounded-full bg-gradient-to-r ${hpGradient} transition-all duration-500`}
             style={{ width: `${hpPct}%` }}
           />
         </div>
@@ -223,6 +170,21 @@ function CharacterCard({ c }: { c: CharacterState }) {
         </span>
       </div>
 
+      {/* Row 4b: XP progress bar */}
+      {c.xp_next_level != null && c.xp_next_level > 0 && (
+        <div className="flex items-center gap-2 mt-1">
+          <div className="flex-1 h-1 bg-gray-700/60 rounded-full overflow-hidden">
+            <div
+              className="h-full rounded-full bg-amber-500/70 transition-all duration-500"
+              style={{ width: `${xpPct}%` }}
+            />
+          </div>
+          <span className="text-[9px] text-amber-400/70 whitespace-nowrap">
+            {c.xp}/{c.xp_next_level} XP
+          </span>
+        </div>
+      )}
+
       {/* Row 5: Mini ability scores */}
       {c.abilities && (
         <div className="flex gap-1 mt-1.5">
@@ -230,9 +192,9 @@ function CharacterCard({ c }: { c: CharacterState }) {
             const ab = c.abilities[key];
             if (!ab) return null;
             return (
-              <div key={key} className="text-center flex-1">
-                <div className="text-[8px] text-gray-600">{abbr}</div>
-                <div className="text-xs font-bold text-white">{ab.score}</div>
+              <div key={key} className="text-center flex-1 bg-gray-800/40 rounded py-0.5">
+                <div className="text-[9px] text-gray-500">{abbr}</div>
+                <div className="text-sm font-bold text-white">{ab.score}</div>
                 <div className={`text-[9px] ${ab.modifier >= 0 ? "text-gray-400" : "text-red-400"}`}>
                   {ab.modifier >= 0 ? "+" : ""}{ab.modifier}
                 </div>
@@ -312,6 +274,8 @@ function InventorySection({ inventory }: { inventory: InventoryItem[] }) {
 function QuestCard({ q }: { q: QuestState }) {
   const [open, setOpen] = useState(false);
   const hasRewards = q.rewards && (q.rewards.xp || q.rewards.gold || (q.rewards.items && q.rewards.items.length > 0));
+  const completedCount = q.objectives.filter((o) => o.completed).length;
+  const progressPct = q.objectives.length > 0 ? (completedCount / q.objectives.length) * 100 : 0;
 
   return (
     <div className="bg-amber-900/20 rounded-lg border border-amber-800/30">
@@ -325,10 +289,21 @@ function QuestCard({ q }: { q: QuestState }) {
         <span className="text-xs text-amber-300 flex-1 truncate">{q.title}</span>
         {q.objectives.length > 0 && (
           <span className="text-[9px] text-gray-500">
-            {q.objectives.filter((o) => o.completed).length}/{q.objectives.length}
+            {completedCount}/{q.objectives.length}
           </span>
         )}
       </button>
+      {/* Objective progress bar */}
+      {q.objectives.length > 0 && (
+        <div className="px-2 pb-1">
+          <div className="h-1 bg-gray-700/40 rounded-full overflow-hidden">
+            <div
+              className="h-full rounded-full bg-emerald-500/70 transition-all duration-500"
+              style={{ width: `${progressPct}%` }}
+            />
+          </div>
+        </div>
+      )}
       {open && (
         <div className="px-2.5 pb-2 space-y-1.5">
           {q.description && (
@@ -339,9 +314,13 @@ function QuestCard({ q }: { q: QuestState }) {
               {q.objectives.map((obj, i) => {
                 const text = obj.description || obj.text || `Objective ${i + 1}`;
                 return (
-                  <div key={i} className="flex items-start gap-1 text-[10px]">
-                    <span className={obj.completed ? "text-green-400" : "text-gray-600"}>
-                      {obj.completed ? "\u2611" : "\u2610"}
+                  <div key={i} className="flex items-start gap-1.5 text-[10px]">
+                    <span className={`inline-block w-3 h-3 mt-px rounded border flex-shrink-0 ${
+                      obj.completed
+                        ? "bg-emerald-600/40 border-emerald-500/60 text-emerald-300"
+                        : "bg-gray-800/40 border-gray-600/40"
+                    } flex items-center justify-center text-[8px] leading-none`}>
+                      {obj.completed ? "\u2713" : ""}
                     </span>
                     <span className={obj.completed ? "text-gray-500 line-through" : "text-gray-300"}>
                       {text}
@@ -379,6 +358,7 @@ function QuestCard({ q }: { q: QuestState }) {
 function NPCCard({ n }: { n: NPCState }) {
   const [open, setOpen] = useState(false);
   const dispStyle = DISPOSITION_COLORS[n.disposition] || DISPOSITION_COLORS.neutral;
+  const familiarityIcon = FAMILIARITY_ICONS[n.familiarity] || "\uD83D\uDC64";
 
   return (
     <div className="bg-purple-900/20 rounded-lg border border-purple-800/30">
@@ -389,6 +369,7 @@ function NPCCard({ n }: { n: NPCState }) {
         <span className="transition-transform duration-150 text-[10px] text-gray-500" style={{ transform: open ? "rotate(90deg)" : "rotate(0deg)" }}>
           {"\u25B6"}
         </span>
+        <span className="text-[11px]">{familiarityIcon}</span>
         <span className="text-xs text-purple-300 flex-1 truncate">{n.name}</span>
         <span className={`text-[9px] px-1.5 py-px rounded-full border capitalize ${dispStyle}`}>
           {n.disposition}
@@ -399,8 +380,17 @@ function NPCCard({ n }: { n: NPCState }) {
           {n.description && (
             <div className="text-[10px] text-gray-400 italic">{n.description}</div>
           )}
+          {n.personality_traits && n.personality_traits.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {n.personality_traits.map((trait, i) => (
+                <span key={i} className="text-[9px] px-1.5 py-px rounded-full bg-purple-900/25 text-purple-300 border border-purple-700/25">
+                  {trait}
+                </span>
+              ))}
+            </div>
+          )}
           <div className="text-[10px] text-gray-500">
-            Familiarity: <span className="text-gray-300 capitalize">{n.familiarity}</span>
+            Familiarity: <span className="text-gray-300 capitalize">{n.familiarity?.replace("_", " ")}</span>
           </div>
         </div>
       )}
@@ -572,12 +562,33 @@ export function GamePanel() {
             {gameState.current_location && (
               <section className="border-t border-gray-800/60 pt-3">
                 <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Location</h3>
-                <div className="bg-gray-800/50 rounded-lg px-3 py-2 border border-gray-700/40">
+                <div className="bg-gray-800/50 rounded-lg px-3 py-2 border border-gray-700/40 space-y-1.5">
                   <div className="flex items-center gap-1.5">
                     <span>{BIOME_ICONS[gameState.current_location.biome] || "\uD83D\uDDFA\uFE0F"}</span>
                     <span className="text-sm text-gray-200">{gameState.current_location.name}</span>
+                    <span className="text-[10px] text-gray-500 capitalize ml-auto">{gameState.current_location.biome}</span>
                   </div>
-                  <div className="text-[10px] text-gray-500 capitalize mt-0.5">{gameState.current_location.biome}</div>
+                  {gameState.current_location.description && (
+                    <div className="text-[10px] text-gray-400 italic line-clamp-2">
+                      {gameState.current_location.description}
+                    </div>
+                  )}
+                  {gameState.current_location.exits && Object.keys(gameState.current_location.exits).length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      <span className="text-[9px] text-gray-500 self-center">Exits:</span>
+                      {Object.entries(gameState.current_location.exits).map(([dir, loc]) => (
+                        <span
+                          key={dir}
+                          className="inline-flex items-center text-[10px] rounded-full bg-gray-800 border border-gray-700/50 overflow-hidden"
+                        >
+                          <span className="inline-flex items-center gap-0.5 bg-amber-900/30 text-amber-300 border-r border-amber-700/30 px-1.5 py-px">
+                            {DIR_ARROWS[dir] || "\u2022"} {capitalize(dir)}
+                          </span>
+                          <span className="text-gray-300 px-1.5 py-px">{loc}</span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </section>
             )}

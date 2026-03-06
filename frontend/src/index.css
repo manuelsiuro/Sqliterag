@@ -93,3 +93,19 @@ body {
 .animate-item-appear {
   animation: item-appear 0.2s ease-out both;
 }
+
+/* Thinking dots animation */
+@keyframes thinking-bounce {
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+  40% { transform: translateY(-6px); opacity: 1; }
+}
+.animate-thinking-dot-1 { animation: thinking-bounce 1.2s ease-in-out infinite; }
+.animate-thinking-dot-2 { animation: thinking-bounce 1.2s ease-in-out 0.15s infinite; }
+.animate-thinking-dot-3 { animation: thinking-bounce 1.2s ease-in-out 0.3s infinite; }
+
+/* Tool execution pulse */
+@keyframes thinking-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.animate-thinking-pulse { animation: thinking-pulse 1.5s ease-in-out infinite; }

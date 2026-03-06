@@ -1,4 +1,5 @@
 import type { ToolRendererProps } from "./toolRendererRegistry";
+import { TYPE_ICONS } from "@/constants/rpg";
 
 interface ItemDetailData {
   name: string;
@@ -10,15 +11,6 @@ interface ItemDetailData {
   rarity: string;
   error?: string;
 }
-
-const TYPE_ICONS: Record<string, string> = {
-  weapon: "\u2694\uFE0F",
-  armor: "\uD83D\uDEE1\uFE0F",
-  consumable: "\uD83E\uDDEA",
-  quest: "\u2B50",
-  scroll: "\uD83D\uDCDC",
-  misc: "\uD83D\uDCE6",
-};
 
 const RARITY_LABEL: Record<string, string> = {
   common: "Common",

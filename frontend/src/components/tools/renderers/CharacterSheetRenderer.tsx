@@ -1,4 +1,5 @@
 import type { ToolRendererProps } from "./toolRendererRegistry";
+import { ABILITY_ORDER, ABILITY_ABBR, RACE_ICONS } from "@/constants/rpg";
 
 interface AbilityScore {
   score: number;
@@ -26,19 +27,6 @@ interface CharacterData {
   changes?: string[];
   error?: string;
 }
-
-const ABILITY_ORDER = ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"];
-const ABILITY_ABBR: Record<string, string> = {
-  strength: "STR", dexterity: "DEX", constitution: "CON",
-  intelligence: "INT", wisdom: "WIS", charisma: "CHA",
-};
-
-const RACE_ICONS: Record<string, string> = {
-  human: "\uD83D\uDC64", elf: "\uD83E\uDDDD", dwarf: "\u26CF\uFE0F",
-  halfling: "\uD83E\uDDB6", gnome: "\uD83D\uDD27", "half-elf": "\uD83C\uDF1F",
-  "half-orc": "\uD83D\uDCAA", tiefling: "\uD83D\uDD25", dragonborn: "\uD83D\uDC09",
-  orc: "\uD83D\uDC79",
-};
 
 export function CharacterSheetRenderer({ data }: ToolRendererProps) {
   const d = data as unknown as CharacterData;

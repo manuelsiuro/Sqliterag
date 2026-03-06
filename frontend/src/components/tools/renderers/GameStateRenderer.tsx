@@ -1,4 +1,5 @@
 import type { ToolRendererProps } from "./toolRendererRegistry";
+import { BIOME_ICONS, TIME_ICONS, WEATHER_ICONS, SEASON_ICONS, capitalize } from "@/constants/rpg";
 
 interface GameStateData {
   world_name: string;
@@ -14,32 +15,6 @@ interface GameSessionData {
   world_name: string;
   session_id: string;
   message: string;
-}
-
-const TIME_ICONS: Record<string, string> = {
-  dawn: "\uD83C\uDF05", morning: "\uD83C\uDF04", day: "\u2600\uFE0F", noon: "\uD83C\uDF1E",
-  afternoon: "\uD83C\uDF24\uFE0F", dusk: "\uD83C\uDF07", evening: "\uD83C\uDF06",
-  night: "\uD83C\uDF19", midnight: "\uD83C\uDF11",
-};
-const WEATHER_ICONS: Record<string, string> = {
-  clear: "\u2600\uFE0F", cloudy: "\u2601\uFE0F", overcast: "\uD83C\uDF25\uFE0F",
-  rain: "\uD83C\uDF27\uFE0F", storm: "\u26C8\uFE0F", snow: "\u2744\uFE0F",
-  fog: "\uD83C\uDF2B\uFE0F", wind: "\uD83D\uDCA8",
-};
-const SEASON_ICONS: Record<string, string> = {
-  spring: "\uD83C\uDF38", summer: "\uD83C\uDF3B", autumn: "\uD83C\uDF42",
-  fall: "\uD83C\uDF42", winter: "\u2744\uFE0F",
-};
-const BIOME_ICONS: Record<string, string> = {
-  town: "\uD83C\uDFD8\uFE0F", village: "\uD83C\uDFE1", forest: "\uD83C\uDF32",
-  dungeon: "\uD83D\uDD73\uFE0F", cave: "\u26F0\uFE0F", mountain: "\uD83C\uDFD4\uFE0F",
-  desert: "\uD83C\uDFDC\uFE0F", swamp: "\uD83E\uDEB9", ocean: "\uD83C\uDF0A",
-  plains: "\uD83C\uDF3E", castle: "\uD83C\uDFF0", temple: "\u26EA",
-  tavern: "\uD83C\uDF7A", shop: "\uD83D\uDED2",
-};
-
-function capitalize(s: string) {
-  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 function EnvironmentPills({ env }: { env: { time_of_day: string; weather: string; season: string } }) {

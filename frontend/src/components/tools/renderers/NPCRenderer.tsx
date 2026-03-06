@@ -55,9 +55,7 @@ const FAMILIARITY_BADGE: Record<string, string> = {
   close_friend: "bg-rose-900/30 text-rose-300 border-rose-700/30",
 };
 
-function capitalize(s: string) {
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
+import { capitalize } from "@/constants/rpg";
 
 export function NPCRenderer({ data }: ToolRendererProps) {
   const d = data as unknown as NPCData;

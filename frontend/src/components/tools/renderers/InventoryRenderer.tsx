@@ -1,4 +1,5 @@
 import type { ToolRendererProps } from "./toolRendererRegistry";
+import { TYPE_ICONS, RARITY_COLORS } from "@/constants/rpg";
 
 interface InventoryItem {
   name: string;
@@ -20,23 +21,6 @@ interface InventoryData {
   total_value_gp: number;
   error?: string;
 }
-
-const TYPE_ICONS: Record<string, string> = {
-  weapon: "\u2694\uFE0F",
-  armor: "\uD83D\uDEE1\uFE0F",
-  consumable: "\uD83E\uDDEA",
-  quest: "\u2B50",
-  scroll: "\uD83D\uDCDC",
-  misc: "\uD83D\uDCE6",
-};
-
-const RARITY_COLORS: Record<string, string> = {
-  common: "text-gray-400",
-  uncommon: "text-green-400",
-  rare: "text-blue-400",
-  very_rare: "text-purple-400",
-  legendary: "text-yellow-400",
-};
 
 export function InventoryRenderer({ data }: ToolRendererProps) {
   const d = data as unknown as InventoryData;

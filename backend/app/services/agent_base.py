@@ -250,6 +250,7 @@ class SingleAgent(BaseAgent):
                     )
                     ctx.session.add(tool_msg)
                     await ctx.session.flush()
+                    await ctx.session.commit()  # Ensure HP/state visible to other sessions
 
                     yield ServerSentEvent(
                         data=json.dumps({
