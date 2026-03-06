@@ -50,6 +50,8 @@ _NARRATOR_FINAL_TOOLS: frozenset[str] = frozenset({
     # Knowledge graph
     "query_relationships", "get_entity_relationships", "get_entity_context",
     "find_connections", "add_relationship",
+    # Encounter balancing
+    "balance_encounter", "generate_monster", "award_xp",
 })
 
 

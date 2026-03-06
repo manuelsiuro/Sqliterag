@@ -79,11 +79,18 @@ interface GameState {
   active_quests: QuestState[];
   npcs: NPCState[];
   in_combat: boolean;
-  combat: unknown;
+  combat: { encounter_difficulty?: { difficulty: string; adjusted_xp: number; multiplier: number } } | null;
   environment: { time_of_day: string; weather: string; season: string };
   campaign?: CampaignInfo | null;
   session_status?: string;
 }
+
+const DIFFICULTY_PILL_STYLES: Record<string, { bg: string; text: string; border: string }> = {
+  easy:   { bg: "bg-green-900/30",  text: "text-green-300",  border: "border-green-700/40" },
+  medium: { bg: "bg-amber-900/30",  text: "text-amber-300",  border: "border-amber-700/40" },
+  hard:   { bg: "bg-orange-900/30", text: "text-orange-300", border: "border-orange-700/40" },
+  deadly: { bg: "bg-red-900/30",    text: "text-red-300",    border: "border-red-700/40" },
+};
 
 const BIOME_ICONS: Record<string, string> = {
   town: "\uD83C\uDFD8\uFE0F", village: "\uD83C\uDFE1", forest: "\uD83C\uDF32",
@@ -535,8 +542,17 @@ export function GamePanel() {
 
             {/* Combat indicator */}
             {gameState.in_combat && (
-              <div className="bg-red-900/30 rounded-lg px-3 py-2 border border-red-700/40 text-center">
+              <div className="bg-red-900/30 rounded-lg px-3 py-2 border border-red-700/40 text-center flex items-center justify-center gap-2">
                 <span className="text-sm font-bold text-red-300">{"\u2694\uFE0F"} Combat in Progress!</span>
+                {gameState.combat?.encounter_difficulty && (() => {
+                  const diff = gameState.combat.encounter_difficulty.difficulty;
+                  const style = DIFFICULTY_PILL_STYLES[diff] || DIFFICULTY_PILL_STYLES.medium;
+                  return (
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${style.bg} ${style.text} border ${style.border} uppercase`}>
+                      {diff}
+                    </span>
+                  );
+                })()}
               </div>
             )}
 

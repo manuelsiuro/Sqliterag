@@ -30,6 +30,8 @@ _ARGUMENT_ALIASES: dict[str, dict[str, str]] = {
     "get_entity_relationships": {"name": "entity_name", "type": "entity_type"},
     "get_entity_context": {"name": "entity_name", "type": "entity_type"},
     "find_connections": {"name": "entity_name", "type": "entity_type", "source": "entity_name", "target": "target_name"},
+    "generate_monster": {"type": "creature_type", "monster_type": "creature_type"},
+    "balance_encounter": {"crs": "enemy_crs", "enemies": "enemy_crs", "difficulty": "desired_difficulty"},
 }
 
 

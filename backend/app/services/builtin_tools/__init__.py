@@ -58,6 +58,11 @@ from app.services.builtin_tools.relationships import (
     get_entity_relationships,
     query_relationships,
 )
+from app.services.builtin_tools.encounters import (
+    award_xp,
+    balance_encounter,
+    generate_monster,
+)
 from app.services.builtin_tools.rest import long_rest, short_rest
 from app.services.builtin_tools.memory import archive_event, end_session, get_session_summary, recall_context, search_memory
 from app.services.builtin_tools.session import get_game_state, init_game_session, list_campaigns_tool, start_campaign
@@ -135,4 +140,8 @@ BUILTIN_REGISTRY: dict[str, callable] = {
     "get_entity_relationships": get_entity_relationships,
     "get_entity_context": get_entity_context,
     "find_connections": find_connections,
+    # Phase 14 — Encounter Balancing
+    "balance_encounter": balance_encounter,
+    "generate_monster": generate_monster,
+    "award_xp": award_xp,
 }

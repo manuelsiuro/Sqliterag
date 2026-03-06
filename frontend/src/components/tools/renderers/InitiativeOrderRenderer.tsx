@@ -17,7 +17,19 @@ interface InitiativeData {
   order: Combatant[];
   message?: string;
   error?: string;
+  encounter_difficulty?: {
+    difficulty: string;
+    adjusted_xp: number;
+    multiplier: number;
+  };
 }
+
+const DIFF_PILL: Record<string, { bg: string; text: string; border: string }> = {
+  easy:   { bg: "bg-green-900/30",  text: "text-green-300",  border: "border-green-700/40" },
+  medium: { bg: "bg-amber-900/30",  text: "text-amber-300",  border: "border-amber-700/40" },
+  hard:   { bg: "bg-orange-900/30", text: "text-orange-300", border: "border-orange-700/40" },
+  deadly: { bg: "bg-red-900/30",    text: "text-red-300",    border: "border-red-700/40" },
+};
 
 export function InitiativeOrderRenderer({ data }: ToolRendererProps) {
   const d = data as unknown as InitiativeData;
@@ -52,9 +64,19 @@ export function InitiativeOrderRenderer({ data }: ToolRendererProps) {
           <span className="text-red-400 text-lg">&#9876;</span>
           <span className="text-sm font-bold text-red-300">COMBAT</span>
         </div>
-        <span className="text-xs bg-red-900/30 text-red-300 px-2 py-0.5 rounded border border-red-700/40">
-          Round {d.round}
-        </span>
+        <div className="flex items-center gap-1.5">
+          {d.encounter_difficulty && (() => {
+            const dc = DIFF_PILL[d.encounter_difficulty.difficulty] || DIFF_PILL.medium;
+            return (
+              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${dc.bg} ${dc.text} border ${dc.border} uppercase`}>
+                {d.encounter_difficulty.difficulty}
+              </span>
+            );
+          })()}
+          <span className="text-xs bg-red-900/30 text-red-300 px-2 py-0.5 rounded border border-red-700/40">
+            Round {d.round}
+          </span>
+        </div>
       </div>
 
       {d.message && (

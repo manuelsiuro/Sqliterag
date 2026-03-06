@@ -48,6 +48,8 @@ RPG_TOOL_NAMES = {
     "find_connections",
     # Campaign
     "start_campaign", "list_campaigns",
+    # Encounter Balancing
+    "balance_encounter", "generate_monster", "award_xp",
 }
 
 # Static fallback — identical to the old RPG_SYSTEM_PROMPT
@@ -138,6 +140,7 @@ _PHASE_TOOLS: dict[GamePhase, frozenset[str]] = {
         "attack", "cast_spell", "heal", "take_damage", "death_save", "combat_action",
         "short_rest", "long_rest",
         "get_inventory", "equip_item", "unequip_item",
+        "balance_encounter", "award_xp",
     }),
     GamePhase.EXPLORATION: frozenset({
         "create_location", "connect_locations", "move_to", "look_around", "set_environment",
@@ -146,6 +149,7 @@ _PHASE_TOOLS: dict[GamePhase, frozenset[str]] = {
         "short_rest", "long_rest",
         "start_combat",
         "add_relationship",
+        "balance_encounter", "generate_monster",
     }),
     GamePhase.SOCIAL: frozenset({
         "create_npc", "talk_to_npc", "update_npc_relationship", "npc_remember",
@@ -206,6 +210,7 @@ _COMBAT_RULES = (
     "- Follow initiative order. Use attack/cast_spell for each combatant's turn.\n"
     "- Apply damage via take_damage. Track death saves with death_save.\n"
     "- Call end_combat when combat concludes.\n"
+    "- After combat ends, use award_xp to distribute XP rewards.\n"
 )
 
 _SOCIAL_RULES = (
@@ -221,6 +226,7 @@ _EXPLORATION_RULES = (
     "- Use look_around to describe the current location.\n"
     "- Use move_to for travel between locations.\n"
     "- Use roll_check for skill-based actions (perception, investigation, athletics, etc.).\n"
+    "- Use generate_monster to create enemies and balance_encounter to check difficulty before combat.\n"
 )
 
 _PHASE_RULES = {
@@ -414,7 +420,16 @@ async def _build_layer3_state(
         for k in ("time_of_day", "weather", "season")
         if env.get(k)
     )
-    combat_str = "active" if game_session.combat_state else "none"
+    combat_str = "none"
+    if game_session.combat_state:
+        combat_str = "active"
+        try:
+            cs = json.loads(game_session.combat_state)
+            ed = cs.get("encounter_difficulty")
+            if ed:
+                combat_str = f"active ({ed['difficulty']})"
+        except (json.JSONDecodeError, KeyError):
+            pass
     parts.append(f"Environment: {env_str} | Combat: {combat_str}")
 
     # Active quests (limit 3)

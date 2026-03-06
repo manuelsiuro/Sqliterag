@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from app.config import settings
 from app.services.builtin_tools._common import (
     AsyncSession,
+    calculate_encounter_difficulty,
     calculate_modifier,
     calculate_proficiency,
+    estimate_cr_from_hp,
     get_character_by_name,
     get_or_create_session,
     json,
@@ -52,15 +55,39 @@ async def start_combat(
         "combatants": [e["name"] for e in initiative_order],
         "initiative": initiative_order,
     }
+
+    # Encounter difficulty injection (Phase 5.4)
+    encounter_difficulty = None
+    if settings.encounter_balancing_enabled and settings.encounter_auto_difficulty:
+        party_levels = []
+        enemy_crs = []
+        for name in combatant_names:
+            char = await get_character_by_name(session, gs.id, name)
+            if char and char.is_player:
+                party_levels.append(char.level)
+            elif char and not char.is_player:
+                enemy_crs.append(estimate_cr_from_hp(char.max_hp))
+        if party_levels and enemy_crs:
+            diff = calculate_encounter_difficulty(party_levels, enemy_crs)
+            encounter_difficulty = {
+                "difficulty": diff["difficulty"],
+                "adjusted_xp": diff["adjusted_xp"],
+                "multiplier": diff["multiplier"],
+            }
+            combat_state["encounter_difficulty"] = encounter_difficulty
+
     gs.combat_state = json.dumps(combat_state)
     await session.flush()
 
-    return json.dumps({
+    result = {
         "type": "initiative_order",
         "round": 1,
         "current_turn": initiative_order[0]["name"],
         "order": initiative_order,
-    })
+    }
+    if encounter_difficulty:
+        result["encounter_difficulty"] = encounter_difficulty
+    return json.dumps(result)
 
 
 async def get_combat_status(

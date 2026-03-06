@@ -125,6 +125,10 @@ class Settings(BaseSettings):
     npc_max_local_memories: int = 5
     npc_max_relationship_hints: int = 4
 
+    # Encounter balancing (Phase 5.4)
+    encounter_balancing_enabled: bool = True
+    encounter_auto_difficulty: bool = True
+
     # Server
     host: str = "0.0.0.0"
     port: int = 8000

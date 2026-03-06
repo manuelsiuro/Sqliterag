@@ -883,6 +883,33 @@ def _builtin_tool_defs() -> dict[str, dict]:
             "execution_type": "builtin",
             "execution_config": _config("find_connections"),
         },
+
+        # ── Phase 14: Encounter Balancing ───────────────────────
+        "balance_encounter": {
+            "description": "Assess encounter difficulty using D&D 5e XP budgets. Compares enemy CRs against party levels to rate Easy/Medium/Hard/Deadly.",
+            "parameters_schema": _schema(["enemy_crs"], {
+                "enemy_crs": {"type": "string", "description": "Comma-separated enemy CRs (e.g. '2, 1/4, 1/4')."},
+                "desired_difficulty": {"type": "string", "description": "Target difficulty (easy, medium, hard, deadly) for recommendations."},
+            }),
+            "execution_type": "builtin",
+            "execution_config": _config("balance_encounter"),
+        },
+        "generate_monster": {
+            "description": "Create a monster with CR-appropriate stats (HP, AC, attack bonus, abilities). Adds it as a non-player character.",
+            "parameters_schema": _schema(["name"], {
+                "name": {"type": "string", "description": "Monster name."},
+                "cr": {"type": "string", "description": "Challenge Rating (e.g. '1/4', '2', '5'). Default: '1'."},
+                "creature_type": {"type": "string", "description": "Creature type: beast, humanoid, undead, fiend, dragon, construct, aberration, elemental, monstrosity, giant, fey, celestial, plant, ooze. Default: humanoid."},
+            }),
+            "execution_type": "builtin",
+            "execution_config": _config("generate_monster"),
+        },
+        "award_xp": {
+            "description": "Distribute XP from defeated enemies equally among player characters. Auto-levels up characters that cross XP thresholds.",
+            "parameters_schema": _schema([], {}),
+            "execution_type": "builtin",
+            "execution_config": _config("award_xp"),
+        },
     }
 
 

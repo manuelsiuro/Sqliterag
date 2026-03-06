@@ -98,3 +98,9 @@ registerToolRenderer("entity_context", EntityContextRenderer);
 import { CampaignRenderer } from "./CampaignRenderer";
 registerToolRenderer("campaign_started", CampaignRenderer);
 registerToolRenderer("campaign_list", CampaignRenderer);
+
+// Phase 14 — Encounter Balancing
+import { EncounterRenderer } from "./EncounterRenderer";
+registerToolRenderer("encounter_balance", EncounterRenderer);
+registerToolRenderer("monster_generated", EncounterRenderer);
+registerToolRenderer("xp_reward", EncounterRenderer);
