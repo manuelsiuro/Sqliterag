@@ -110,6 +110,10 @@ class Settings(BaseSettings):
     # Multi-agent pipeline (Phase 4.1)
     multi_agent_enabled: bool = False
 
+    # PALADIN self-correction (Phase 4.7)
+    paladin_enabled: bool = True
+    paladin_max_retries: int = 2
+
     # Server
     host: str = "0.0.0.0"
     port: int = 8000

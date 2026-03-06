@@ -57,6 +57,10 @@ class ArchivistAgent(SingleAgent):
     def allowed_tool_names(self) -> frozenset[str] | None:
         return _ARCHIVIST_TOOLS
 
+    @property
+    def correction_mode(self) -> str:
+        return "minimal"
+
     def build_system_prompt(self, ctx: AgentContext) -> str | None:
         return None  # Sync path — signals orchestrator to try async
 
@@ -75,6 +79,7 @@ def _build_archivist_layer1() -> str:
         "You are the Archivist for a D&D 5e game. You maintain the game's "
         "long-term memory and knowledge graph.\n\n"
         "ROLE:\n"
+        "- Check [HANDOFF] messages for a summary of what happened this turn.\n"
         "- Review what happened this turn and decide what is worth remembering.\n"
         "- Use archive_event for significant story beats, discoveries, combat "
         "outcomes, player decisions.\n"

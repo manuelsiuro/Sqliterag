@@ -45,6 +45,10 @@ class RulesEngineAgent(SingleAgent):
     def allowed_tool_names(self) -> frozenset[str] | None:
         return _RULES_ENGINE_TOOLS
 
+    @property
+    def correction_mode(self) -> str:
+        return "aggressive"
+
     def should_run(self, ctx: AgentContext) -> bool:
         return ctx.phase == GamePhase.COMBAT
 

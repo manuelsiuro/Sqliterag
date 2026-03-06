@@ -10,6 +10,7 @@ from sse_starlette.sse import ServerSentEvent
 
 from app.services.agent_base import BaseAgent
 from app.services.agent_context import AgentContext
+from app.services.handoff import build_handoff_summary
 from app.services.token_utils import estimate_tokens
 
 logger = logging.getLogger(__name__)
@@ -32,6 +33,31 @@ def _replace_system_prompt(ctx: AgentContext, new_prompt: str) -> None:
     # Fallback: no existing system prompt found — insert at position 0
     ctx.messages.insert(0, {"role": "system", "content": new_prompt})
     ctx.budget.system_prompt_tokens = estimate_tokens(new_prompt)
+
+
+def _inject_handoff_message(ctx: AgentContext, handoff_text: str) -> None:
+    """Insert a handoff summary before the last user message.
+
+    Strips any previous handoff message (marker _handoff: True) to prevent
+    accumulation across agents.
+    """
+    # Strip previous handoff messages
+    ctx.messages = [m for m in ctx.messages if not m.get("_handoff")]
+
+    # Find last user-message index
+    last_user_idx = None
+    for i in range(len(ctx.messages) - 1, -1, -1):
+        if ctx.messages[i].get("role") == "user":
+            last_user_idx = i
+            break
+
+    handoff_msg = {"role": "system", "content": handoff_text, "_handoff": True}
+    if last_user_idx is not None:
+        ctx.messages.insert(last_user_idx, handoff_msg)
+    else:
+        ctx.messages.append(handoff_msg)
+
+    ctx.budget.conversation_history_tokens += estimate_tokens(handoff_text)
 
 
 class AgentOrchestrator:
@@ -66,11 +92,17 @@ class AgentOrchestrator:
             if new_prompt is not None:
                 _replace_system_prompt(ctx, new_prompt)
 
+            # Phase 4.6: Inject handoff summary from prior agents
+            if ctx.agent_handoffs:
+                handoff_text = "\n".join(ctx.agent_handoffs.values())
+                _inject_handoff_message(ctx, handoff_text)
+
             yield ServerSentEvent(
                 data=json.dumps({"agent": agent.name, "index": i}),
                 event="agent_start",
             )
 
+            msg_start_idx = len(ctx.messages)
             agent_text = ""
             async for event in agent.run(ctx):
                 try:
@@ -103,3 +135,8 @@ class AgentOrchestrator:
 
             if agent_text:
                 ctx.agent_outputs[agent.name] = agent_text
+
+            # Phase 4.6: Build handoff summary from this agent's tool results
+            handoff = build_handoff_summary(agent.name, ctx.messages, msg_start_idx)
+            if handoff:
+                ctx.agent_handoffs[agent.name] = handoff

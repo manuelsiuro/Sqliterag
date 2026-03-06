@@ -84,6 +84,10 @@ export const api = {
           onToolResult?.(data);
         } else if (ev.event === "agent_start") {
           console.debug("Agent started:", JSON.parse(ev.data));
+        } else if (ev.event === "self_correction") {
+          console.debug("PALADIN self-correction:", JSON.parse(ev.data));
+        } else if (ev.event === "agent_done") {
+          console.debug("Agent done:", JSON.parse(ev.data));
         } else if (ev.event === "error") {
           const data = JSON.parse(ev.data);
           onError(new Error(data.error || "Stream failed"));

@@ -15,6 +15,11 @@ from app.models.message import Message
 from app.services.agent_context import AgentContext
 from app.services.eviction_service import evict_and_store
 from app.services.prompt_builder import filter_tools_by_phase
+from app.services.paladin import (
+    CORRECTION_MARKER,
+    build_correction_message,
+    should_self_correct,
+)
 from app.services.token_utils import (
     apply_history_summarization,
     estimate_message_tokens,
@@ -51,6 +56,11 @@ class BaseAgent(abc.ABC):
     def is_user_facing(self) -> bool:
         """Whether this agent's text output should stream to the user."""
         return True
+
+    @property
+    def correction_mode(self) -> str:
+        """Self-correction aggressiveness: 'aggressive', 'moderate', 'minimal'."""
+        return "moderate"
 
     def should_run(self, ctx: AgentContext) -> bool:
         """Whether this agent should run for the current context. Default: True."""
@@ -132,6 +142,8 @@ class SingleAgent(BaseAgent):
         kwargs: dict = {"think": False}
         if ctx.options:
             kwargs["options"] = ctx.options
+
+        correction_attempts = 0
 
         for _round in range(MAX_TOOL_ROUNDS):
             if ctx.budget.tokens_remaining < 0:
@@ -253,6 +265,35 @@ class SingleAgent(BaseAgent):
                     ctx.messages.append(tool_ctx)
                     ctx.budget.conversation_history_tokens += estimate_message_tokens(tool_ctx)
             else:
+                # PALADIN self-correction gate (Phase 4.7)
+                if (
+                    settings.paladin_enabled
+                    and correction_attempts < settings.paladin_max_retries
+                    and should_self_correct(
+                        self.name, self.correction_mode,
+                        ctx.phase, content, ctx.user_message,
+                    )
+                ):
+                    correction_attempts += 1
+                    correction_msg = build_correction_message(
+                        content, correction_attempts, ctx.phase,
+                    )
+                    ctx.messages.append(correction_msg)
+                    ctx.budget.conversation_history_tokens += estimate_message_tokens(
+                        correction_msg
+                    )
+                    logger.info(
+                        "PALADIN correction #%d/%d for agent '%s'",
+                        correction_attempts, settings.paladin_max_retries, self.name,
+                    )
+                    yield ServerSentEvent(
+                        data=json.dumps({
+                            "agent": self.name, "attempt": correction_attempts,
+                        }),
+                        event="self_correction",
+                    )
+                    continue  # Re-enter loop for another LLM call
+
                 # Final text response — chunk into token-like SSE events
                 for i in range(0, len(content), TOKEN_CHUNK_SIZE):
                     chunk = content[i : i + TOKEN_CHUNK_SIZE]

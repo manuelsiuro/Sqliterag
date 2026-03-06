@@ -130,7 +130,8 @@ async def _build_narrator_prompt(ctx: AgentContext) -> str:
         layer1 += (
             "COMBAT NARRATION MODE:\n"
             "- The Rules Engine has already resolved all combat mechanics.\n"
-            "- Narrate the mechanical outcomes dramatically using the tool results above.\n"
+            "- See the [HANDOFF from rules_engine] message for a summary of mechanical outcomes.\n"
+            "- Narrate those outcomes dramatically using the tool results above.\n"
             "- Do NOT call combat tools (attack, cast_spell, take_damage, etc.).\n"
             f"- {bookkeeping_hint}\n"
         )

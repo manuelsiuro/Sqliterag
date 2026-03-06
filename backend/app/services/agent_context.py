@@ -47,3 +47,4 @@ class AgentContext:
     actions: list[dict] = field(default_factory=list)
     current_agent: str = ""
     agent_outputs: dict[str, str] = field(default_factory=dict)
+    agent_handoffs: dict[str, str] = field(default_factory=dict)
