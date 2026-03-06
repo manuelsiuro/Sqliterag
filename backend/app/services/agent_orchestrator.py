@@ -10,8 +10,28 @@ from sse_starlette.sse import ServerSentEvent
 
 from app.services.agent_base import BaseAgent
 from app.services.agent_context import AgentContext
+from app.services.token_utils import estimate_tokens
 
 logger = logging.getLogger(__name__)
+
+
+def _replace_system_prompt(ctx: AgentContext, new_prompt: str) -> None:
+    """Replace the RPG system prompt in ctx.messages with the agent's prompt.
+
+    The RPG system prompt starts with '/nothink'.  We find the first matching
+    system message and swap its content, adjusting the token budget delta.
+    """
+    for msg in ctx.messages:
+        if msg.get("role") == "system" and msg.get("content", "").startswith("/nothink"):
+            old_tokens = estimate_tokens(msg["content"])
+            msg["content"] = new_prompt
+            new_tokens = estimate_tokens(new_prompt)
+            ctx.budget.system_prompt_tokens += new_tokens - old_tokens
+            return
+
+    # Fallback: no existing system prompt found — insert at position 0
+    ctx.messages.insert(0, {"role": "system", "content": new_prompt})
+    ctx.budget.system_prompt_tokens = estimate_tokens(new_prompt)
 
 
 class AgentOrchestrator:
@@ -25,6 +45,15 @@ class AgentOrchestrator:
     ) -> AsyncGenerator[ServerSentEvent, None]:
         for i, agent in enumerate(self.agents):
             ctx.current_agent = agent.name
+
+            # Phase 4.2: Apply agent-specific system prompt
+            new_prompt = None
+            if hasattr(agent, "build_system_prompt_async"):
+                new_prompt = await agent.build_system_prompt_async(ctx)
+            if new_prompt is None:
+                new_prompt = agent.build_system_prompt(ctx)
+            if new_prompt is not None:
+                _replace_system_prompt(ctx, new_prompt)
 
             yield ServerSentEvent(
                 data=json.dumps({"agent": agent.name, "index": i}),
