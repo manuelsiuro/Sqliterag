@@ -26,6 +26,24 @@ export function InitiativeOrderRenderer({ data }: ToolRendererProps) {
     return <div className="mt-2 text-red-400 text-sm">{d.error}</div>;
   }
 
+  // combat_summary from end_combat has no order array — show summary instead
+  if (!d.order) {
+    return (
+      <div className="mt-2 bg-gray-800/30 rounded-lg px-3 py-2.5 border border-gray-700/30 space-y-2">
+        <div className="flex items-center gap-2">
+          <span className="text-red-400 text-lg">&#9876;</span>
+          <span className="text-sm font-bold text-red-300">COMBAT ENDED</span>
+          {d.round > 0 && (
+            <span className="text-xs bg-gray-700/50 text-gray-400 px-2 py-0.5 rounded">
+              {d.round} round{d.round !== 1 ? "s" : ""}
+            </span>
+          )}
+        </div>
+        {d.message && <div className="text-xs text-gray-400 italic">{d.message}</div>}
+      </div>
+    );
+  }
+
   return (
     <div className="mt-2 bg-gray-800/30 rounded-lg px-3 py-2.5 border border-gray-700/30 space-y-2">
       {/* Round counter */}

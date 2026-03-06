@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 
+from app.config import settings
 from app.services.agent_base import SingleAgent
 from app.services.agent_context import AgentContext
 from app.services.prompt_builder import (
@@ -19,6 +20,13 @@ from app.services.prompt_builder import (
 from app.services.rpg_service import get_or_create_session
 
 logger = logging.getLogger(__name__)
+
+# Tools that move exclusively to the Archivist when multi-agent is enabled
+_ARCHIVIST_EXCLUSIVE_TOOLS: frozenset[str] = frozenset({
+    "archive_event", "add_relationship",
+    "npc_remember", "update_npc_relationship",
+    "update_quest_objective",
+})
 
 _NARRATOR_FINAL_TOOLS: frozenset[str] = frozenset({
     # World & Exploration
@@ -59,6 +67,8 @@ class NarratorAgent(SingleAgent):
 
     @property
     def allowed_tool_names(self) -> frozenset[str] | None:
+        if settings.multi_agent_enabled:
+            return _NARRATOR_FINAL_TOOLS - _ARCHIVIST_EXCLUSIVE_TOOLS
         return _NARRATOR_FINAL_TOOLS
 
     def build_system_prompt(self, ctx: AgentContext) -> str | None:
@@ -113,12 +123,16 @@ async def _build_narrator_prompt(ctx: AgentContext) -> str:
 
     # Phase 4.3: Combat narration mode addendum
     if ctx.phase == GamePhase.COMBAT:
+        if settings.multi_agent_enabled:
+            bookkeeping_hint = "The Archivist handles memory and quest updates."
+        else:
+            bookkeeping_hint = "You may still call archive_event, quest tools, or NPC tools if appropriate."
         layer1 += (
             "COMBAT NARRATION MODE:\n"
             "- The Rules Engine has already resolved all combat mechanics.\n"
             "- Narrate the mechanical outcomes dramatically using the tool results above.\n"
             "- Do NOT call combat tools (attack, cast_spell, take_damage, etc.).\n"
-            "- You may still call archive_event, quest tools, or NPC tools if appropriate.\n"
+            f"- {bookkeeping_hint}\n"
         )
 
     # Reuse existing layers 2-3 from prompt_builder

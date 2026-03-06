@@ -47,6 +47,11 @@ class BaseAgent(abc.ABC):
         """Build agent-specific system prompt. Return None to use existing."""
         ...
 
+    @property
+    def is_user_facing(self) -> bool:
+        """Whether this agent's text output should stream to the user."""
+        return True
+
     def should_run(self, ctx: AgentContext) -> bool:
         """Whether this agent should run for the current context. Default: True."""
         return True

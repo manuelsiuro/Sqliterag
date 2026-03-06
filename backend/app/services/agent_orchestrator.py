@@ -47,8 +47,14 @@ class AgentOrchestrator:
         if not active_agents:
             return
 
+        # Find the last user-facing agent — only it streams token/done to client
+        last_uf_idx = max(
+            (seq for seq, (_, a) in enumerate(active_agents) if a.is_user_facing),
+            default=len(active_agents) - 1,
+        )
+
         for seq, (i, agent) in enumerate(active_agents):
-            is_last = seq == len(active_agents) - 1
+            is_streaming = seq == last_uf_idx and agent.is_user_facing
             ctx.current_agent = agent.name
 
             # Phase 4.2: Apply agent-specific system prompt
@@ -74,8 +80,13 @@ class AgentOrchestrator:
                     if event.event == "token" and "token" in event_data:
                         agent_text += event_data["token"]
 
-                    # Suppress token/done from non-final agents
-                    if not is_last and event.event in ("token", "done"):
+                    # Suppress errors from non-user-facing agents (log only)
+                    if event.event == "error" and not agent.is_user_facing:
+                        logger.warning("Silent agent '%s' error: %s", agent.name, event_data)
+                        continue
+
+                    # Suppress token/done from non-streaming agents
+                    if not is_streaming and event.event in ("token", "done"):
                         if event.event == "done":
                             yield ServerSentEvent(
                                 data=json.dumps(event_data),

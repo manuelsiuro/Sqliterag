@@ -3,6 +3,7 @@ from __future__ import annotations
 from functools import lru_cache
 
 from app.services.agent_orchestrator import AgentOrchestrator
+from app.services.archivist_agent import ArchivistAgent
 from app.services.narrator_agent import NarratorAgent
 from app.services.rules_engine_agent import RulesEngineAgent
 from app.services.chat_service import ChatService
@@ -29,7 +30,11 @@ def get_tool_service() -> ToolService:
 
 @lru_cache
 def get_orchestrator() -> AgentOrchestrator:
-    return AgentOrchestrator(agents=[RulesEngineAgent(), NarratorAgent()])
+    return AgentOrchestrator(agents=[
+        RulesEngineAgent(),   # COMBAT only
+        NarratorAgent(),      # All phases (user-facing)
+        ArchivistAgent(),     # All phases (silent, last)
+    ])
 
 
 @lru_cache
