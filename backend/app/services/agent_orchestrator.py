@@ -43,7 +43,12 @@ class AgentOrchestrator:
     async def run_pipeline(
         self, ctx: AgentContext,
     ) -> AsyncGenerator[ServerSentEvent, None]:
-        for i, agent in enumerate(self.agents):
+        active_agents = [(i, a) for i, a in enumerate(self.agents) if a.should_run(ctx)]
+        if not active_agents:
+            return
+
+        for seq, (i, agent) in enumerate(active_agents):
+            is_last = seq == len(active_agents) - 1
             ctx.current_agent = agent.name
 
             # Phase 4.2: Apply agent-specific system prompt
@@ -60,13 +65,30 @@ class AgentOrchestrator:
                 event="agent_start",
             )
 
+            agent_text = ""
             async for event in agent.run(ctx):
                 try:
                     event_data = json.loads(event.data) if event.data else {}
                     event_data["agent"] = agent.name
+
+                    if event.event == "token" and "token" in event_data:
+                        agent_text += event_data["token"]
+
+                    # Suppress token/done from non-final agents
+                    if not is_last and event.event in ("token", "done"):
+                        if event.event == "done":
+                            yield ServerSentEvent(
+                                data=json.dumps(event_data),
+                                event="agent_done",
+                            )
+                        continue
+
                     yield ServerSentEvent(
                         data=json.dumps(event_data),
                         event=event.event,
                     )
                 except (json.JSONDecodeError, TypeError):
                     yield event
+
+            if agent_text:
+                ctx.agent_outputs[agent.name] = agent_text

@@ -47,6 +47,10 @@ class BaseAgent(abc.ABC):
         """Build agent-specific system prompt. Return None to use existing."""
         ...
 
+    def should_run(self, ctx: AgentContext) -> bool:
+        """Whether this agent should run for the current context. Default: True."""
+        return True
+
     @abc.abstractmethod
     async def run(self, ctx: AgentContext) -> AsyncGenerator[ServerSentEvent, None]:
         """Execute agent logic, yield SSE events."""
@@ -83,6 +87,14 @@ class SingleAgent(BaseAgent):
             )
         else:
             llm_tools = ctx.conv_tools
+
+        # Agent-level tool narrowing (Phase 4.3)
+        if self.allowed_tool_names is not None:
+            llm_tools = [t for t in llm_tools if t.name in self.allowed_tool_names]
+            logger.info(
+                "Agent '%s' tool filter: %d tools after agent narrowing",
+                self.name, len(llm_tools),
+            )
 
         ollama_tools = ctx.tool_service.build_ollama_tools(llm_tools)
         ctx.budget.tool_definitions_tokens = estimate_tool_definitions_tokens(ollama_tools)

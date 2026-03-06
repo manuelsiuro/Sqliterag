@@ -20,8 +20,6 @@ from app.services.rpg_service import get_or_create_session
 
 logger = logging.getLogger(__name__)
 
-# Tools the Narrator will own in the final 3-agent pipeline (Phase 4.3+).
-# Interim: allowed_tool_names returns None (all tools) until Rules Engine exists.
 _NARRATOR_FINAL_TOOLS: frozenset[str] = frozenset({
     # World & Exploration
     "look_around", "move_to", "create_location", "connect_locations", "set_environment",
@@ -33,6 +31,17 @@ _NARRATOR_FINAL_TOOLS: frozenset[str] = frozenset({
     "create_quest", "update_quest_objective", "complete_quest", "get_quest_journal",
     # Memory
     "archive_event", "search_memory",
+    # Dice (exploration skill checks)
+    "roll_d20", "roll_dice", "roll_check", "roll_save",
+    # Characters (full lifecycle outside combat)
+    "create_character", "get_character", "update_character", "list_characters",
+    # Inventory (exploration: create items, trade)
+    "create_item", "give_item", "get_inventory", "transfer_item",
+    # Combat entry (Narrator starts combat, Rules Engine takes over next turn)
+    "start_combat",
+    # Knowledge graph
+    "query_relationships", "get_entity_relationships", "get_entity_context",
+    "find_connections", "add_relationship",
 })
 
 
@@ -50,9 +59,7 @@ class NarratorAgent(SingleAgent):
 
     @property
     def allowed_tool_names(self) -> frozenset[str] | None:
-        # Interim: all tools (no Rules Engine yet to handle combat/mechanics)
-        # Future (Phase 4.3): return _NARRATOR_FINAL_TOOLS
-        return None
+        return _NARRATOR_FINAL_TOOLS
 
     def build_system_prompt(self, ctx: AgentContext) -> str | None:
         return None  # Sync path — signals orchestrator to try async
@@ -103,6 +110,16 @@ def _build_narrator_layer4() -> str:
 async def _build_narrator_prompt(ctx: AgentContext) -> str:
     """Build the full 4-layer narrator system prompt."""
     layer1 = _build_narrator_layer1()
+
+    # Phase 4.3: Combat narration mode addendum
+    if ctx.phase == GamePhase.COMBAT:
+        layer1 += (
+            "COMBAT NARRATION MODE:\n"
+            "- The Rules Engine has already resolved all combat mechanics.\n"
+            "- Narrate the mechanical outcomes dramatically using the tool results above.\n"
+            "- Do NOT call combat tools (attack, cast_spell, take_damage, etc.).\n"
+            "- You may still call archive_event, quest tools, or NPC tools if appropriate.\n"
+        )
 
     # Reuse existing layers 2-3 from prompt_builder
     try:
