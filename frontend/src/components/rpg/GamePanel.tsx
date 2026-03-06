@@ -401,7 +401,7 @@ function NPCCard({ n }: { n: NPCState }) {
 export function GamePanel() {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [loading, setLoading] = useState(false);
-  const { activeConversationId, messages } = useChatStore();
+  const { activeConversationId, messages, isStreaming } = useChatStore();
 
   // Track message count to detect new tool results
   const messageCount = messages.length;
@@ -433,7 +433,7 @@ export function GamePanel() {
     });
 
     return () => { cancelled = true; };
-  }, [activeConversationId, messageCount]);
+  }, [activeConversationId, messageCount, isStreaming]);
 
   const { continueCampaign } = useCampaignStore();
   const { selectConversation, loadConversations } = useChatStore();

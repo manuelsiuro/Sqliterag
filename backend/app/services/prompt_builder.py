@@ -208,7 +208,9 @@ def _build_layer1_identity() -> str:
 _COMBAT_RULES = (
     "COMBAT PHASE:\n"
     "- Follow initiative order. Use attack/cast_spell for each combatant's turn.\n"
-    "- Apply damage via take_damage. Track death saves with death_save.\n"
+    "- NEVER use roll_dice for attacks or damage — ALWAYS use the attack tool. "
+    "The attack tool handles hit rolls, damage, and HP updates automatically.\n"
+    "- Apply damage via take_damage for non-attack sources. Track death saves with death_save.\n"
     "- Call end_combat when combat concludes.\n"
     "- After combat ends, use award_xp to distribute XP rewards.\n"
 )
