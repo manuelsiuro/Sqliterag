@@ -46,6 +46,8 @@ RPG_TOOL_NAMES = {
     # Knowledge Graph
     "add_relationship", "query_relationships", "get_entity_relationships", "get_entity_context",
     "find_connections",
+    # Campaign
+    "start_campaign", "list_campaigns",
 }
 
 # Static fallback — identical to the old RPG_SYSTEM_PROMPT
@@ -126,6 +128,8 @@ _CORE_TOOLS: frozenset[str] = frozenset({
     "archive_event", "search_memory", "recall_context", "get_session_summary", "end_session",
     # Knowledge Graph (read)
     "query_relationships", "get_entity_relationships", "get_entity_context", "find_connections",
+    # Campaign
+    "start_campaign", "list_campaigns",
 })
 
 _PHASE_TOOLS: dict[GamePhase, frozenset[str]] = {
@@ -291,7 +295,34 @@ async def _build_layer3_state(
     game_session: GameSession,
 ) -> str:
     """Query DB and build compact state summary."""
-    parts: list[str] = ["CURRENT STATE:"]
+    parts: list[str] = []
+
+    # Campaign recap ("Previously on...")
+    if game_session.campaign_id and game_session.session_number > 1:
+        try:
+            from app.services import campaign_service
+            from app.models.rpg import Campaign
+            camp_result = await session.execute(
+                select(Campaign).where(Campaign.id == game_session.campaign_id)
+            )
+            camp = camp_result.scalars().first()
+            if camp:
+                parts.append(f"CAMPAIGN: {camp.name} | Session #{game_session.session_number}")
+                summaries = await campaign_service.get_previous_summaries(
+                    session, game_session.campaign_id, limit=3,
+                )
+                if summaries:
+                    lines = []
+                    for s in summaries:
+                        text = s["summary"]
+                        if len(text) > 120:
+                            text = text[:117] + "..."
+                        lines.append(f"- Session {s['session_number']}: {text}")
+                    parts.append("PREVIOUSLY:\n" + "\n".join(lines))
+        except Exception:
+            pass  # Campaign context is supplementary — never breaks prompt
+
+    parts.append("CURRENT STATE:")
     entity_names: dict[tuple[str, str], str] = {}
 
     # World + Location

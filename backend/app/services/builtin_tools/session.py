@@ -1,4 +1,4 @@
-"""Game session management tools (Phase 9)."""
+"""Game session management tools (Phase 9 + Phase 5.1 campaigns)."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from app.services.builtin_tools._common import (
     json,
     select,
 )
+from app.models.rpg import Campaign
 
 
 async def init_game_session(
@@ -99,4 +100,63 @@ async def get_game_state(
         "in_combat": combat is not None,
         "combat": combat,
         "environment": env,
+    })
+
+
+async def start_campaign(
+    campaign_name: str,
+    world_name: str = "",
+    *,
+    session: AsyncSession,
+    conversation_id: str,
+) -> str:
+    """Start a new campaign and link the current session to it."""
+    from app.services import campaign_service
+
+    gs = await get_or_create_session(session, conversation_id)
+
+    # Check if session already belongs to a campaign
+    if gs.campaign_id:
+        result = await session.execute(select(Campaign).where(Campaign.id == gs.campaign_id))
+        existing = result.scalars().first()
+        name = existing.name if existing else "unknown"
+        return json.dumps({
+            "type": "campaign_started",
+            "error": f"This session is already part of campaign '{name}'.",
+        })
+
+    if not world_name.strip():
+        world_name = gs.world_name or generate_world_name()
+
+    campaign = await campaign_service.create_campaign(
+        session, name=campaign_name, description="", world_name=world_name,
+    )
+    gs.campaign_id = campaign.id
+    gs.world_name = world_name
+    campaign.world_name = world_name
+    await session.flush()
+
+    return json.dumps({
+        "type": "campaign_started",
+        "campaign_id": campaign.id,
+        "campaign_name": campaign.name,
+        "world_name": world_name,
+        "session_number": gs.session_number,
+        "message": f"Campaign '{campaign_name}' started in {world_name}! Your progress will persist across sessions.",
+    })
+
+
+async def list_campaigns_tool(
+    *,
+    session: AsyncSession,
+    conversation_id: str,
+) -> str:
+    """List all available campaigns."""
+    from app.services import campaign_service
+
+    campaigns = await campaign_service.list_campaigns(session)
+    return json.dumps({
+        "type": "campaign_list",
+        "campaigns": campaigns,
+        "count": len(campaigns),
     })

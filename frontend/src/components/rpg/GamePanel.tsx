@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useChatStore } from "@/store/chatStore";
+import { useCampaignStore } from "@/store/campaignStore";
 import { api } from "@/services/api";
 
 interface AbilityScore {
@@ -64,6 +65,13 @@ interface NPCState {
   description: string;
 }
 
+interface CampaignInfo {
+  id: string;
+  name: string;
+  session_number: number;
+  status: string;
+}
+
 interface GameState {
   world_name: string;
   characters: CharacterState[];
@@ -73,6 +81,8 @@ interface GameState {
   in_combat: boolean;
   combat: unknown;
   environment: { time_of_day: string; weather: string; season: string };
+  campaign?: CampaignInfo | null;
+  session_status?: string;
 }
 
 const BIOME_ICONS: Record<string, string> = {
@@ -425,6 +435,20 @@ export function GamePanel() {
     return () => { cancelled = true; };
   }, [activeConversationId, messageCount]);
 
+  const { continueCampaign } = useCampaignStore();
+  const { selectConversation, loadConversations } = useChatStore();
+
+  const handleContinue = async () => {
+    if (!gameState?.campaign?.id) return;
+    try {
+      const newConvId = await continueCampaign(gameState.campaign.id);
+      await loadConversations();
+      selectConversation(newConvId);
+    } catch (err) {
+      console.error("Continue campaign failed:", err);
+    }
+  };
+
   const playerChars = gameState?.characters.filter(c => c.is_player) || [];
   const creatures = gameState?.characters.filter(c => !c.is_player) || [];
 
@@ -453,6 +477,28 @@ export function GamePanel() {
           </div>
         ) : (
           <>
+            {/* Campaign */}
+            {gameState.campaign && (
+              <section className="bg-amber-950/20 rounded-lg px-3 py-2.5 border border-amber-800/30">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold text-amber-200 flex-1 truncate">
+                    {gameState.campaign.name}
+                  </span>
+                  <span className="text-[10px] px-1.5 py-px rounded-full bg-amber-900/40 text-amber-400 border border-amber-700/30">
+                    Session {gameState.campaign.session_number}
+                  </span>
+                </div>
+                {gameState.session_status === "ended" && (
+                  <button
+                    onClick={handleContinue}
+                    className="mt-2 w-full py-1.5 text-xs bg-emerald-700 hover:bg-emerald-600 text-white rounded-md transition-colors"
+                  >
+                    Continue Campaign
+                  </button>
+                )}
+              </section>
+            )}
+
             {/* World */}
             <section>
               <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">World</h3>

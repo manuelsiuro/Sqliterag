@@ -3,6 +3,7 @@ from app.models.conversation import Conversation
 from app.models.document import Document, DocumentChunk
 from app.models.message import Message
 from app.models.rpg import (
+    Campaign,
     Character,
     GameMemory,
     GameSession,
@@ -18,6 +19,7 @@ from app.models.tool import ConversationTool, Tool
 
 __all__ = [
     "Base",
+    "Campaign",
     "Character",
     "Conversation",
     "GameMemory",

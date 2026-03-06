@@ -10,7 +10,7 @@ from sqlalchemy.orm import selectinload
 from app.database import get_session
 from app.exceptions import NotFoundError
 from app.models.conversation import Conversation
-from app.models.rpg import Character, GameSession, InventoryItem, Item, Location, NPC, Quest
+from app.models.rpg import Campaign, Character, GameSession, InventoryItem, Item, Location, NPC, Quest
 from app.schemas.conversation import (
     ConversationCreate,
     ConversationRead,
@@ -25,7 +25,35 @@ router = APIRouter(prefix="/conversations", tags=["conversations"])
 @router.get("", response_model=list[ConversationRead])
 async def list_conversations(session: AsyncSession = Depends(get_session)):
     result = await session.execute(select(Conversation).order_by(Conversation.updated_at.desc()))
-    return result.scalars().all()
+    convs = result.scalars().all()
+
+    # Join campaign data for all conversations
+    conv_ids = [c.id for c in convs]
+    gs_result = await session.execute(
+        select(GameSession).where(GameSession.conversation_id.in_(conv_ids))
+    )
+    gs_map: dict[str, GameSession] = {gs.conversation_id: gs for gs in gs_result.scalars().all()}
+
+    # Fetch campaign names for sessions that have campaign_id
+    campaign_ids = {gs.campaign_id for gs in gs_map.values() if gs.campaign_id}
+    camp_map: dict[str, str] = {}
+    if campaign_ids:
+        camp_result = await session.execute(
+            select(Campaign).where(Campaign.id.in_(campaign_ids))
+        )
+        camp_map = {c.id: c.name for c in camp_result.scalars().all()}
+
+    out = []
+    for c in convs:
+        data = ConversationRead.model_validate(c).model_dump()
+        gs = gs_map.get(c.id)
+        if gs and gs.campaign_id:
+            data["campaign_id"] = gs.campaign_id
+            data["campaign_name"] = camp_map.get(gs.campaign_id)
+            data["session_number"] = gs.session_number
+            data["session_status"] = gs.status
+        out.append(data)
+    return out
 
 
 @router.post("", response_model=ConversationRead, status_code=201)
@@ -157,6 +185,21 @@ async def get_rpg_state(conversation_id: str, session: AsyncSession = Depends(ge
     combat = json.loads(gs.combat_state) if gs.combat_state else None
     env = json.loads(gs.environment)
 
+    # Campaign info
+    campaign_info = None
+    if gs.campaign_id:
+        camp_result = await session.execute(
+            select(Campaign).where(Campaign.id == gs.campaign_id)
+        )
+        camp = camp_result.scalars().first()
+        if camp:
+            campaign_info = {
+                "id": camp.id,
+                "name": camp.name,
+                "session_number": gs.session_number,
+                "status": camp.status,
+            }
+
     return {
         "type": "game_state",
         "world_name": gs.world_name,
@@ -167,4 +210,6 @@ async def get_rpg_state(conversation_id: str, session: AsyncSession = Depends(ge
         "in_combat": combat is not None,
         "combat": combat,
         "environment": env,
+        "campaign": campaign_info,
+        "session_status": gs.status,
     }

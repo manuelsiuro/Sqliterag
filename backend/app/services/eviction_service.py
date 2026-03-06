@@ -284,6 +284,7 @@ async def _store_recall(
         content=text,
         entity_names=entities,
         importance_score=settings.memgpt_recall_importance,
+        session_number=gs.session_number,
         embedding_service=embedding_service,
     )
     logger.info(

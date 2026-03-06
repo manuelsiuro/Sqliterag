@@ -280,11 +280,13 @@ async def search_fts(
     try:
         where_parts = ["fts_memories MATCH :query"]
         params: dict = {"query": sanitized, "k": k}
-        needs_join = bool(session_id or memory_types or entity_types or session_range)
+        # When session_range is given, skip session_id filter (cross-session search)
+        effective_session_id = session_id if not session_range else None
+        needs_join = bool(effective_session_id or memory_types or entity_types or session_range)
 
-        if session_id:
+        if effective_session_id:
             where_parts.append("g.session_id = :sid")
-            params["sid"] = session_id
+            params["sid"] = effective_session_id
         if memory_types:
             ph = ", ".join(f":mt{i}" for i in range(len(memory_types)))
             where_parts.append(f"g.memory_type IN ({ph})")
@@ -340,7 +342,8 @@ async def search_vec(
         vec_bytes = _serialize_float32(embedding)
 
         # Over-fetch when metadata filters are active
-        has_filters = bool(session_id or memory_types or entity_types or session_range)
+        # When session_range is given, skip session_id filter (cross-session search)
+        has_filters = bool((session_id if not session_range else None) or memory_types or entity_types or session_range)
         vec_k = int(k * settings.memory_vec_overfetch_factor) if has_filters else k
 
         # sqlite-vec requires LIMIT directly on the vec0 query (no JOINs)
@@ -381,9 +384,11 @@ async def search_vec(
         where_parts = ["id IN ({})".format(", ".join(f"'{m}'" for m in mid_list))]
         filter_params: dict = {}
 
-        if session_id:
+        # When session_range is given, skip session_id filter (cross-session search)
+        effective_session_id = session_id if not session_range else None
+        if effective_session_id:
             where_parts.append("session_id = :sid")
-            filter_params["sid"] = session_id
+            filter_params["sid"] = effective_session_id
         if memory_types:
             ph = ", ".join(f":mt{i}" for i in range(len(memory_types)))
             where_parts.append(f"memory_type IN ({ph})")

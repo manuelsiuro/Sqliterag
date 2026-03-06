@@ -114,6 +114,10 @@ class Settings(BaseSettings):
     paladin_enabled: bool = True
     paladin_max_retries: int = 2
 
+    # Campaign persistence (Phase 5.1)
+    campaign_enabled: bool = True
+    campaign_recap_max_sessions: int = 3
+
     # Server
     host: str = "0.0.0.0"
     port: int = 8000

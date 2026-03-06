@@ -4,6 +4,34 @@ export interface Conversation {
   model: string;
   created_at: string;
   updated_at: string;
+  campaign_id?: string | null;
+  campaign_name?: string | null;
+  session_number?: number | null;
+  session_status?: string | null;
+}
+
+export interface Campaign {
+  id: string;
+  name: string;
+  world_name: string;
+  description: string;
+  status: "active" | "completed";
+  session_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CampaignSession {
+  conversation_id: string;
+  session_number: number;
+  status: "active" | "ended";
+  world_name: string;
+  summary: string | null;
+  created_at: string;
+}
+
+export interface CampaignDetail extends Campaign {
+  sessions: CampaignSession[];
 }
 
 export interface ActionSuggestion {

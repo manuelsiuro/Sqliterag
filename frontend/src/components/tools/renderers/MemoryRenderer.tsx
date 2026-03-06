@@ -50,6 +50,8 @@ interface SessionEndedData {
   world_name?: string;
   summary: string;
   status: string;
+  campaign_id?: string;
+  campaign_name?: string;
   error?: string;
 }
 
@@ -222,6 +224,13 @@ function EndedView({ d }: { d: SessionEndedData }) {
         )}
       </div>
       <p className="text-sm text-gray-200 italic">{d.summary}</p>
+      {d.campaign_name && (
+        <div className="flex items-center gap-1.5 pt-1 border-t border-amber-800/20">
+          <span className="text-[10px] text-amber-400/70">Campaign:</span>
+          <span className="text-xs text-amber-300">{d.campaign_name}</span>
+          <span className="text-[10px] text-gray-500 ml-auto">Continue in a new session</span>
+        </div>
+      )}
     </div>
   );
 }

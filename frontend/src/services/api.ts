@@ -1,6 +1,8 @@
 import { fetchEventSource } from "@microsoft/fetch-event-source";
 import type {
   ActionSuggestion,
+  Campaign,
+  CampaignDetail,
   Conversation,
   ConversationWithMessages,
   DatabaseInfo,
@@ -221,4 +223,31 @@ export const api = {
   // RPG
   getGameState: (conversationId: string) =>
     request<Record<string, unknown> | null>(`/conversations/${conversationId}/rpg/state`),
+
+  // Campaigns
+  listCampaigns: (status?: string) =>
+    request<Campaign[]>(`/campaigns${status ? `?status=${status}` : ""}`),
+
+  getCampaign: (id: string) => request<CampaignDetail>(`/campaigns/${id}`),
+
+  createCampaign: (data: { name: string; description?: string }) =>
+    request<Campaign>("/campaigns", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  updateCampaign: (id: string, data: { name?: string; description?: string; status?: string }) =>
+    request<Campaign>(`/campaigns/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+
+  deleteCampaign: (id: string) =>
+    request<void>(`/campaigns/${id}`, { method: "DELETE" }),
+
+  continueCampaign: (campaignId: string) =>
+    request<{ conversation_id: string; session_number: number; campaign_name: string }>(
+      `/campaigns/${campaignId}/continue`,
+      { method: "POST" },
+    ),
 };

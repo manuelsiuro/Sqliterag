@@ -150,6 +150,7 @@ async def init_db() -> None:
 
         await _migrate_messages_table(conn)
         await _migrate_game_sessions_table(conn)
+        await _migrate_campaigns_table(conn)
 
     # If fts_memories is empty but game_memories has rows, rebuild the FTS index
     await _sync_fts_on_startup()
@@ -174,6 +175,23 @@ async def _migrate_game_sessions_table(conn) -> None:
             logger.info("Added column rpg_game_sessions.%s", col_name)
         except Exception:
             pass  # Column already exists
+
+
+async def _migrate_campaigns_table(conn) -> None:
+    """Add campaign_id column to rpg_game_sessions (Phase 5.1, idempotent)."""
+    try:
+        await conn.execute(
+            text("ALTER TABLE rpg_game_sessions ADD COLUMN campaign_id VARCHAR(36) REFERENCES rpg_campaigns(id) ON DELETE SET NULL")
+        )
+        logger.info("Added column rpg_game_sessions.campaign_id")
+    except Exception:
+        pass  # Column already exists
+    try:
+        await conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS idx_gamesession_campaign ON rpg_game_sessions(campaign_id)"
+        ))
+    except Exception:
+        pass
 
 
 async def _migrate_messages_table(conn) -> None:
@@ -713,6 +731,23 @@ def _builtin_tool_defs() -> dict[str, dict]:
             }),
             "execution_type": "builtin",
             "execution_config": _config("end_session"),
+        },
+
+        # ── Phase 12: Campaign Persistence ────────────────────────
+        "start_campaign": {
+            "description": "Start a new campaign to persist characters, locations, NPCs, and quests across multiple sessions. Links the current session to the campaign.",
+            "parameters_schema": _schema(["campaign_name"], {
+                "campaign_name": {"type": "string", "description": "Name of the campaign (e.g. 'Shadows of Eldenhollow')."},
+                "world_name": {"type": "string", "description": "World name for the campaign. Defaults to current world name."},
+            }),
+            "execution_type": "builtin",
+            "execution_config": _config("start_campaign"),
+        },
+        "list_campaigns": {
+            "description": "List all available campaigns with their status and session count.",
+            "parameters_schema": _schema([], {}),
+            "execution_type": "builtin",
+            "execution_config": _config("list_campaigns"),
         },
 
         # ── Phase 11: Knowledge Graph ───────────────────────────

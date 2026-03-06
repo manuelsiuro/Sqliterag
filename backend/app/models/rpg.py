@@ -12,6 +12,23 @@ from app.models.base import Base
 
 
 # ---------------------------------------------------------------------------
+# Campaign — groups multiple GameSessions (Phase 5.1)
+# ---------------------------------------------------------------------------
+class Campaign(Base):
+    __tablename__ = "rpg_campaigns"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    name: Mapped[str] = mapped_column(String(200))
+    world_name: Mapped[str] = mapped_column(String(200), default="Unnamed World")
+    description: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(20), default="active")  # active | completed
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+    sessions: Mapped[list[GameSession]] = relationship(back_populates="campaign")
+
+
+# ---------------------------------------------------------------------------
 # GameSession — 1:1 with a Conversation
 # ---------------------------------------------------------------------------
 class GameSession(Base):
@@ -21,6 +38,9 @@ class GameSession(Base):
     conversation_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("conversations.id", ondelete="CASCADE"), unique=True
     )
+    campaign_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("rpg_campaigns.id", ondelete="SET NULL"), nullable=True
+    )
     world_name: Mapped[str] = mapped_column(String(200), default="Unnamed World")
     current_location_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     environment: Mapped[str] = mapped_column(Text, default='{"time_of_day":"day","weather":"clear","season":"summer"}')
@@ -29,6 +49,8 @@ class GameSession(Base):
     status: Mapped[str] = mapped_column(String(20), default="active")  # active | ended
     session_summary: Mapped[str | None] = mapped_column(Text, nullable=True)  # LLM narrative
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+    campaign: Mapped[Campaign | None] = relationship(back_populates="sessions")
 
     characters: Mapped[list[Character]] = relationship(back_populates="game_session", cascade="all, delete-orphan")
     locations: Mapped[list[Location]] = relationship(back_populates="game_session", cascade="all, delete-orphan")

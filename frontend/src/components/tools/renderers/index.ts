@@ -93,3 +93,8 @@ registerToolRenderer("connection_map", RelationshipRenderer);
 // Phase 12 — Entity Context
 import { EntityContextRenderer } from "./EntityContextRenderer";
 registerToolRenderer("entity_context", EntityContextRenderer);
+
+// Phase 13 — Campaign
+import { CampaignRenderer } from "./CampaignRenderer";
+registerToolRenderer("campaign_started", CampaignRenderer);
+registerToolRenderer("campaign_list", CampaignRenderer);

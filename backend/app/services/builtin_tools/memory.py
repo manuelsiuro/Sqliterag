@@ -55,6 +55,7 @@ async def archive_event(
         content=description,
         entity_names=entities,
         importance_score=score,
+        session_number=gs.session_number,
         embedding_service=embedding_service,
     )
 
@@ -101,6 +102,16 @@ async def search_memory(
                 parsed_range = (int(sr), int(sr))
             except ValueError:
                 pass
+
+    # Auto-expand scope to full campaign if no explicit range given
+    if parsed_range is None and gs.campaign_id:
+        try:
+            from app.services import campaign_service
+            camp_range = await campaign_service.get_campaign_session_numbers(session, gs.campaign_id)
+            if camp_range:
+                parsed_range = camp_range
+        except Exception:
+            pass
 
     results = await memory_service.search_with_stanford_scoring(
         session,
@@ -327,13 +338,27 @@ async def end_session(
         content=summary_text,
         entity_names=[gs.world_name],
         importance_score=0.9,
+        session_number=gs.session_number,
         embedding_service=embedding_service,
     )
 
-    return json.dumps({
+    result_data = {
         "type": "session_ended",
         "session_number": gs.session_number,
         "world_name": gs.world_name,
         "summary": summary_text,
         "status": "ended",
-    })
+    }
+
+    # Include campaign info so user knows they can continue
+    if gs.campaign_id:
+        from app.models.rpg import Campaign
+        camp_result = await session.execute(
+            select(Campaign).where(Campaign.id == gs.campaign_id)
+        )
+        camp = camp_result.scalars().first()
+        if camp:
+            result_data["campaign_id"] = camp.id
+            result_data["campaign_name"] = camp.name
+
+    return json.dumps(result_data)

@@ -23,6 +23,11 @@ class ConversationRead(BaseModel):
     model: str
     created_at: datetime
     updated_at: datetime
+    # Campaign fields (populated by router join)
+    campaign_id: str | None = None
+    campaign_name: str | None = None
+    session_number: int | None = None
+    session_status: str | None = None
 
 
 class ConversationWithMessages(ConversationRead):
