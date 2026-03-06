@@ -82,6 +82,8 @@ export const api = {
         } else if (ev.event === "tool_result") {
           const data = JSON.parse(ev.data) as ToolResultEvent;
           onToolResult?.(data);
+        } else if (ev.event === "agent_start") {
+          console.debug("Agent started:", JSON.parse(ev.data));
         } else if (ev.event === "error") {
           const data = JSON.parse(ev.data);
           onError(new Error(data.error || "Stream failed"));

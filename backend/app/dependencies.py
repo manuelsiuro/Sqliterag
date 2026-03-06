@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from functools import lru_cache
 
+from app.services.agent_base import SingleAgent
+from app.services.agent_orchestrator import AgentOrchestrator
 from app.services.chat_service import ChatService
 from app.services.huggingface_service import HuggingFaceService
 from app.services.ollama_service import OllamaService
@@ -25,12 +27,18 @@ def get_tool_service() -> ToolService:
 
 
 @lru_cache
+def get_orchestrator() -> AgentOrchestrator:
+    return AgentOrchestrator(agents=[SingleAgent()])
+
+
+@lru_cache
 def get_chat_service() -> ChatService:
     return ChatService(
         llm_service=get_ollama_service(),
         rag_service=get_rag_service(),
         tool_service=get_tool_service(),
         embedding_service=get_ollama_service(),
+        orchestrator=get_orchestrator(),
     )
 
 

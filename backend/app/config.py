@@ -107,6 +107,9 @@ class Settings(BaseSettings):
     graphrag_min_strength: int = 30
     graphrag_weight: float = 0.3
 
+    # Multi-agent pipeline (Phase 4.1)
+    multi_agent_enabled: bool = False
+
     # Server
     host: str = "0.0.0.0"
     port: int = 8000

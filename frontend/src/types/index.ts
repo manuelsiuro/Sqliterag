@@ -137,6 +137,7 @@ export interface ToolCreate {
 export interface ToolCallEvent {
   tool_calls: Array<{ function: { name: string; arguments: Record<string, unknown> } }>;
   message_id: string;
+  agent?: string;
 }
 
 export interface ToolResultEvent {
@@ -144,4 +145,5 @@ export interface ToolResultEvent {
   arguments: Record<string, unknown>;
   result: string;
   message_id: string;
+  agent?: string;
 }
