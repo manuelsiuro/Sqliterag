@@ -9,6 +9,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from app.config import settings
 from app.database import get_session
 from app.dependencies import get_chat_service, get_ollama_service, get_rag_service
 from app.main import app
@@ -47,7 +48,7 @@ async def engine():
         if _HAS_LOAD_EXTENSION:
             await conn.execute(
                 text(
-                    "CREATE VIRTUAL TABLE IF NOT EXISTS vec_chunks USING vec0(embedding float[768])"
+                    f"CREATE VIRTUAL TABLE IF NOT EXISTS vec_chunks USING vec0(embedding float[{settings.embedding_dimensions}])"
                 )
             )
     yield engine
@@ -73,7 +74,7 @@ def mock_ollama():
             }
         ]
     )
-    service.generate_embedding = AsyncMock(return_value=[0.1] * 768)
+    service.generate_embedding = AsyncMock(return_value=[0.1] * settings.embedding_dimensions)
     return service
 
 

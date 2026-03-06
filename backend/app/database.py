@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from collections.abc import AsyncGenerator
 
 import sqlite_vec
@@ -53,17 +54,59 @@ async def get_session() -> AsyncGenerator[AsyncSession]:
         yield session
 
 
+async def _detect_vec_dimension(conn, table_name: str) -> int | None:
+    """Return the current dimension of a vec0 table, or None if not found."""
+    try:
+        row = (await conn.execute(
+            text("SELECT sql FROM sqlite_master WHERE type='table' AND name=:name"),
+            {"name": table_name},
+        )).fetchone()
+        if row is None:
+            return None
+        match = re.search(r"float\[(\d+)\]", row[0])
+        return int(match.group(1)) if match else None
+    except Exception:
+        return None
+
+
+async def _migrate_vec_dimensions(conn) -> bool:
+    """Detect dimension mismatch and recreate vec tables. Returns True if migrated."""
+    dim = settings.embedding_dimensions
+    migrated = False
+    for table_name in ("vec_chunks", "vec_memories"):
+        current_dim = await _detect_vec_dimension(conn, table_name)
+        if current_dim is None or current_dim == dim:
+            continue
+        logger.info("Vec table %s dimension %d -> %d: recreating", table_name, current_dim, dim)
+        await conn.execute(text(f"DROP TABLE IF EXISTS {table_name}"))
+        await conn.execute(text(
+            f"CREATE VIRTUAL TABLE {table_name} USING vec0(embedding float[{dim}])"
+        ))
+        migrated = True
+    if migrated:
+        try:
+            await conn.execute(text("DELETE FROM vec_memory_map"))
+        except Exception:
+            pass
+    return migrated
+
+
 async def init_db() -> None:
     """Create ORM tables and the vec0 virtual table."""
     from app.models import Base  # noqa: F811
 
+    dim = settings.embedding_dimensions
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         try:
+            await _migrate_vec_dimensions(conn)
+        except Exception:
+            logger.warning("Vec dimension migration check failed", exc_info=True)
+        try:
             await conn.execute(
                 text(
-                    "CREATE VIRTUAL TABLE IF NOT EXISTS vec_chunks "
-                    "USING vec0(embedding float[768])"
+                    f"CREATE VIRTUAL TABLE IF NOT EXISTS vec_chunks "
+                    f"USING vec0(embedding float[{dim}])"
                 )
             )
         except Exception:
@@ -75,8 +118,8 @@ async def init_db() -> None:
         try:
             await conn.execute(
                 text(
-                    "CREATE VIRTUAL TABLE IF NOT EXISTS vec_memories "
-                    "USING vec0(embedding float[768])"
+                    f"CREATE VIRTUAL TABLE IF NOT EXISTS vec_memories "
+                    f"USING vec0(embedding float[{dim}])"
                 )
             )
         except Exception:
@@ -154,7 +197,7 @@ async def init_db() -> None:
 
     # If fts_memories is empty but game_memories has rows, rebuild the FTS index
     await _sync_fts_on_startup()
-    await _warn_vec_on_startup()
+    await _rebuild_vec_on_startup()
 
     await seed_builtin_tools()
     logger.info("Database initialized")
@@ -240,26 +283,44 @@ async def _sync_fts_on_startup() -> None:
         logger.warning("Could not sync fts_memories on startup", exc_info=True)
 
 
-async def _warn_vec_on_startup() -> None:
-    """Warn if game_memories exist but vec_memory_map is empty (needs rebuild)."""
+async def _rebuild_vec_on_startup() -> None:
+    """Auto-rebuild vec indexes when tables are empty but source data exists."""
     try:
+        from app.dependencies import get_ollama_service
+
+        embedding_service = get_ollama_service()
         async with async_session_factory() as session:
-            vec_count = (
+            # Check vec_memory_map vs game_memories
+            vec_map_count = (
                 await session.execute(text("SELECT COUNT(*) FROM vec_memory_map"))
             ).scalar() or 0
-            if vec_count > 0:
-                return
             mem_count = (
                 await session.execute(text("SELECT COUNT(*) FROM game_memories"))
             ).scalar() or 0
-            if mem_count > 0:
-                logger.warning(
-                    "%d game memories exist but vec_memory_map is empty — "
-                    "run rebuild_vec_index() to enable vector search",
-                    mem_count,
-                )
+            if mem_count > 0 and vec_map_count == 0:
+                from app.services.memory_service import rebuild_vec_index
+
+                logger.info("Rebuilding vec_memories index (%d memories)...", mem_count)
+                rebuilt = await rebuild_vec_index(session, embedding_service)
+                await session.commit()
+                logger.info("Rebuilt vec_memories: %d rows", rebuilt)
+
+            # Check vec_chunks vs document_chunks
+            vec_chunks_count = (
+                await session.execute(text("SELECT COUNT(*) FROM vec_chunks"))
+            ).scalar() or 0
+            doc_chunks_count = (
+                await session.execute(text("SELECT COUNT(*) FROM document_chunks"))
+            ).scalar() or 0
+            if doc_chunks_count > 0 and vec_chunks_count == 0:
+                from app.services.rag_service import rebuild_vec_chunks_index
+
+                logger.info("Rebuilding vec_chunks index (%d chunks)...", doc_chunks_count)
+                rebuilt = await rebuild_vec_chunks_index(session, embedding_service)
+                await session.commit()
+                logger.info("Rebuilt vec_chunks: %d rows", rebuilt)
     except Exception:
-        logger.warning("Could not check vec_memory_map on startup", exc_info=True)
+        logger.warning("Could not rebuild vec indexes on startup", exc_info=True)
 
 
 def _schema(required: list[str], properties: dict) -> str:

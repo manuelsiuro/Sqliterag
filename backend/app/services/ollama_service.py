@@ -83,7 +83,11 @@ class OllamaService(BaseLLMService, BaseEmbeddingService):
             embeddings = data.get("embeddings", [])
             if not embeddings:
                 raise ValueError("No embeddings returned from Ollama")
-            return embeddings[0]
+            full = embeddings[0]
+            dim = settings.embedding_dimensions
+            if dim and dim < len(full):
+                return full[:dim]
+            return full
 
     async def pull_model_stream(self, name: str) -> AsyncGenerator[dict]:
         payload = {"name": name, "stream": True}

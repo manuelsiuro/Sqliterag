@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     # Models
     default_model: str = "qwen3.5:9b"
     embedding_model: str = "nomic-embed-text"
+    embedding_dimensions: int = 256  # 256 = Matryoshka optimized, 768 = full
 
     # Default generation parameters (Qwen3.5:9b-optimized)
     default_model_parameters: dict = {

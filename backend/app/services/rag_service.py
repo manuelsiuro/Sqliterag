@@ -8,6 +8,8 @@ from pypdf import PdfReader
 from sqlalchemy import text as sql_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from sqlalchemy import select
+
 from app.config import settings
 from app.models.document import Document, DocumentChunk
 from app.services.base import BaseEmbeddingService
@@ -121,3 +123,31 @@ class RAGService:
             await session.execute(
                 sql_text(f"DELETE FROM vec_chunks WHERE rowid IN ({placeholders})")
             )
+
+
+async def rebuild_vec_chunks_index(
+    session: AsyncSession,
+    embedding_service: BaseEmbeddingService,
+) -> int:
+    """Full reindex from document_chunks -> vec_chunks."""
+    try:
+        await session.execute(sql_text("DELETE FROM vec_chunks"))
+
+        result = await session.execute(select(DocumentChunk))
+        chunks = result.scalars().all()
+
+        count = 0
+        for chunk in chunks:
+            embedding = await embedding_service.generate_embedding(f"search_document: {chunk.content}")
+            vec_bytes = serialize_float32(embedding)
+            await session.execute(
+                sql_text("INSERT INTO vec_chunks(rowid, embedding) VALUES (:rowid, :embedding)"),
+                {"rowid": chunk.id, "embedding": vec_bytes},
+            )
+            count += 1
+
+        logger.info("Rebuilt vec_chunks index: %d rows", count)
+        return count
+    except Exception:
+        logger.warning("Vec chunks rebuild failed", exc_info=True)
+        return 0
