@@ -15,6 +15,7 @@ export function TopBar() {
     selectConversation,
     startDnDGame,
     isStreaming,
+    setPendingInput,
   } = useChatStore();
   const { continueCampaign, loadCampaigns } = useCampaignStore();
   const { localModels } = useSettingsStore();
@@ -59,6 +60,22 @@ export function TopBar() {
     } catch (err) {
       console.error("Continue campaign failed:", err);
     }
+  };
+
+  const handleEditorSetup = () => {
+    const editorPrompt = `You are an expert web developer and game designer. I want you to create a tiny, self-contained HTML mini-game.
+
+CRITICAL INSTRUCTIONS BEFORE WE BEGIN:
+1. DO NOT GENERATE ANY CODE YET. 
+2. Reply ONLY with an acknowledgment of these rules and ask me what kind of game I would like to build.
+3. When you DO write code later, it MUST be constrained to 2500 tokens or less. Keep logic extremely simple so it doesn't get cut off.
+4. Future code must be exactly ONE markdown code block starting with \`\`\`html and ending with \`\`\`.
+5. Future code must use ONLY vanilla JS, CSS, and HTML5 (like <canvas>). No external dependencies.
+6. Code must be minified to fit in the token limit.
+7. No comments in the code.
+8. If the code is too long, it will be cut off, so keep it extremely concise and compact whithout comments.
+9. If the user asks for a game that is too complex for the 2500 tokens limit, ask them if they would like a simpler version of the game.`;
+    setPendingInput(editorPrompt);
   };
 
   return (
@@ -111,11 +128,21 @@ export function TopBar() {
         </button>
       )}
 
+      {/* Editor button */}
+      <button
+        title="Insert Editor Setup Prompt"
+        onClick={handleEditorSetup}
+        className="px-3 py-1.5 bg-purple-700 hover:bg-purple-600 text-white text-sm rounded-lg transition-colors ml-auto flex items-center gap-1.5"
+      >
+        <span className="text-base leading-none">✨</span>
+        Editor
+      </button>
+
       {/* Start D&D game button */}
       <button
         onClick={handleStartDnD}
         disabled={isStartingGame || isStreaming}
-        className="px-3 py-1.5 bg-amber-700 hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded-lg transition-colors ml-auto flex items-center gap-1.5"
+        className="px-3 py-1.5 bg-amber-700 hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded-lg transition-colors flex items-center gap-1.5"
       >
         {isStartingGame ? (
           <>

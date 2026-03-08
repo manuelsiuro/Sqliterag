@@ -21,9 +21,12 @@ const MODAL_TITLES: Record<string, string> = {
 };
 
 function App() {
-  const { error, clearError } = useChatStore();
+  const { error, clearError, conversations, activeConversationId } = useChatStore();
   const { loadLocalModels } = useSettingsStore();
   const { activeModal, closeModal } = useUIStore();
+
+  const activeConv = conversations.find(c => c.id === activeConversationId);
+  const isRpgSession = activeConv?.title === "D&D Adventure" || !!activeConv?.campaign_id;
 
   useEffect(() => {
     loadLocalModels();
@@ -38,7 +41,7 @@ function App() {
           <main className="flex-1 flex flex-col min-w-0">
             <ChatWindow />
           </main>
-          <GamePanel />
+          {isRpgSession && <GamePanel />}
         </div>
       </div>
 
