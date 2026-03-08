@@ -4,6 +4,7 @@ from functools import lru_cache
 
 from app.services.agent_orchestrator import AgentOrchestrator
 from app.services.archivist_agent import ArchivistAgent
+from app.services.frontend_bridge import FrontendBridge
 from app.services.narrator_agent import NarratorAgent
 from app.services.rules_engine_agent import RulesEngineAgent
 from app.services.chat_service import ChatService
@@ -38,6 +39,12 @@ def get_orchestrator() -> AgentOrchestrator:
 
 
 @lru_cache
+def get_frontend_bridge() -> FrontendBridge:
+    from app.config import settings
+    return FrontendBridge(default_timeout=settings.frontend_bridge_timeout)
+
+
+@lru_cache
 def get_chat_service() -> ChatService:
     return ChatService(
         llm_service=get_ollama_service(),
@@ -45,6 +52,7 @@ def get_chat_service() -> ChatService:
         tool_service=get_tool_service(),
         embedding_service=get_ollama_service(),
         orchestrator=get_orchestrator(),
+        frontend_bridge=get_frontend_bridge(),
     )
 
 

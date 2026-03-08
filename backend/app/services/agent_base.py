@@ -32,6 +32,21 @@ logger = logging.getLogger(__name__)
 
 MAX_TOOL_ROUNDS = 10
 TOKEN_CHUNK_SIZE = 4
+_HEARTBEAT_INTERVAL = 5.0  # seconds between SSE heartbeats during frontend bridge wait
+
+
+async def _await_with_heartbeats(
+    bridge: "FrontendBridge",
+    request_id: str,
+    timeout: float,
+) -> str:
+    """Await a frontend bridge result, but we can't yield heartbeats from here.
+
+    The SSE connection is kept alive by fetchEventSource on the client side,
+    so we just await the bridge result directly.
+    """
+    from app.services.frontend_bridge import FrontendBridge  # noqa: F811
+    return await bridge.await_result(request_id, timeout=timeout)
 
 
 class BaseAgent(abc.ABC):
@@ -104,8 +119,13 @@ class SingleAgent(BaseAgent):
             llm_tools = ctx.conv_tools
 
         # Agent-level tool narrowing (Phase 4.3)
+        # Non-RPG tools (e.g. run_shell) always pass through the agent filter
         if self.allowed_tool_names is not None:
-            llm_tools = [t for t in llm_tools if t.name in self.allowed_tool_names]
+            from app.services.prompt_builder import RPG_TOOL_NAMES
+            llm_tools = [
+                t for t in llm_tools
+                if t.name in self.allowed_tool_names or t.name not in RPG_TOOL_NAMES
+            ]
             logger.info(
                 "Agent '%s' tool filter: %d tools after agent narrowing",
                 self.name, len(llm_tools),
@@ -219,25 +239,79 @@ class SingleAgent(BaseAgent):
                             tool_name = vr.tool_name
                             arguments = vr.arguments
                             tool = ctx.tool_map[tool_name]
-                            tool_result = await ctx.tool_service.execute_tool(
-                                tool, arguments,
-                                session=ctx.session,
-                                conversation_id=ctx.conversation_id,
-                                embedding_service=ctx.embedding_service,
-                                llm_service=ctx.llm_service,
-                            )
+
+                            # Frontend bridge: pause-and-resume for browser-executed tools
+                            if (
+                                tool.execution_type == "frontend"
+                                and ctx.frontend_bridge is not None
+                                and settings.frontend_bridge_enabled
+                            ):
+                                cmd = arguments.get("command", "")
+                                request_id = ctx.frontend_bridge.create_request(tool_name, arguments)
+                                yield ServerSentEvent(
+                                    data=json.dumps({
+                                        "request_id": request_id,
+                                        "tool_name": tool_name,
+                                        "arguments": arguments,
+                                    }),
+                                    event="frontend_exec_request",
+                                )
+                                # Send heartbeats while waiting
+                                raw_result = await _await_with_heartbeats(
+                                    ctx.frontend_bridge, request_id,
+                                    settings.frontend_bridge_timeout,
+                                )
+                                tool_result = json.dumps({
+                                    "type": "shell_result",
+                                    "command": cmd,
+                                    "output": raw_result,
+                                })
+                            else:
+                                tool_result = await ctx.tool_service.execute_tool(
+                                    tool, arguments,
+                                    session=ctx.session,
+                                    conversation_id=ctx.conversation_id,
+                                    embedding_service=ctx.embedding_service,
+                                    llm_service=ctx.llm_service,
+                                )
                     else:
                         tool_name = raw_name
                         arguments = raw_arguments
                         tool = ctx.tool_map.get(tool_name)
                         if tool:
-                            tool_result = await ctx.tool_service.execute_tool(
-                                tool, arguments,
-                                session=ctx.session,
-                                conversation_id=ctx.conversation_id,
-                                embedding_service=ctx.embedding_service,
-                                llm_service=ctx.llm_service,
-                            )
+                            # Frontend bridge: pause-and-resume for browser-executed tools
+                            if (
+                                tool.execution_type == "frontend"
+                                and ctx.frontend_bridge is not None
+                                and settings.frontend_bridge_enabled
+                            ):
+                                cmd = arguments.get("command", "")
+                                request_id = ctx.frontend_bridge.create_request(tool_name, arguments)
+                                yield ServerSentEvent(
+                                    data=json.dumps({
+                                        "request_id": request_id,
+                                        "tool_name": tool_name,
+                                        "arguments": arguments,
+                                    }),
+                                    event="frontend_exec_request",
+                                )
+                                raw_result = await _await_with_heartbeats(
+                                    ctx.frontend_bridge, request_id,
+                                    settings.frontend_bridge_timeout,
+                                )
+                                tool_result = json.dumps({
+                                    "type": "shell_result",
+                                    "command": cmd,
+                                    "output": raw_result,
+                                })
+                            else:
+                                tool_result = await ctx.tool_service.execute_tool(
+                                    tool, arguments,
+                                    session=ctx.session,
+                                    conversation_id=ctx.conversation_id,
+                                    embedding_service=ctx.embedding_service,
+                                    llm_service=ctx.llm_service,
+                                )
                         else:
                             tool_result = f"[Unknown tool: {tool_name}]"
 

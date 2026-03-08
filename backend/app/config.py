@@ -133,6 +133,10 @@ class Settings(BaseSettings):
     encounter_balancing_enabled: bool = True
     encounter_auto_difficulty: bool = True
 
+    # Frontend bridge for browser-executed tools (shell via v86)
+    frontend_bridge_enabled: bool = True
+    frontend_bridge_timeout: float = 45.0
+
     # Frontend visualization (Phase 5.6)
     visualization_enabled: bool = True
     visualization_memory_page_size: int = 50

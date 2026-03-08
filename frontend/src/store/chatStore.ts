@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import type { Conversation, Message, ModelParameters } from "@/types";
 import { api } from "@/services/api";
+import { v86Service } from "@/services/v86Service";
+import { useLinuxStore } from "@/store/linuxStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useToolStore } from "@/store/toolStore";
 import { useVisualizationStore } from "@/store/visualizationStore";
@@ -209,6 +211,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
       // onBudget (Phase 5.6)
       (data) => {
         useVisualizationStore.getState().setBudget(data);
+      },
+      // onFrontendExecRequest — execute command in browser VM and return result
+      async (data) => {
+        const { request_id, arguments: args } = data;
+        const command = (args?.command as string) || "";
+        try {
+          // Auto-boot VM if not ready
+          await useLinuxStore.getState().waitForReady(30000);
+          const output = await v86Service.executeCommand(command);
+          await api.postToolCallback(request_id, output);
+        } catch (err) {
+          const errMsg = err instanceof Error ? err.message : "VM execution failed";
+          await api.postToolCallback(request_id, null, errMsg);
+        }
       },
     );
     set({ abortController: ctrl });

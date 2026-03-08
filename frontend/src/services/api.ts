@@ -59,6 +59,14 @@ export const api = {
     request<void>(`/conversations/${id}`, { method: "DELETE" }),
 
   // Chat (SSE)
+  postToolCallback: async (requestId: string, result: string | null, error?: string) => {
+    await fetch(`${BASE_URL}/chat/tool-callback/${requestId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ result, error: error || null }),
+    });
+  },
+
   streamChat: (
     conversationId: string,
     message: string,
@@ -70,6 +78,7 @@ export const api = {
     onToolCall?: (data: ToolCallEvent) => void,
     onToolResult?: (data: ToolResultEvent) => void,
     onBudget?: (data: TokenBudgetSnapshot) => void,
+    onFrontendExecRequest?: (data: { request_id: string; tool_name: string; arguments: Record<string, unknown> }) => void,
   ) => {
     const ctrl = new AbortController();
     fetchEventSource(`${BASE_URL}/chat/${conversationId}`, {
@@ -98,6 +107,9 @@ export const api = {
           console.debug("Agent done:", JSON.parse(ev.data));
         } else if (ev.event === "budget") {
           onBudget?.(JSON.parse(ev.data) as TokenBudgetSnapshot);
+        } else if (ev.event === "frontend_exec_request") {
+          const data = JSON.parse(ev.data);
+          onFrontendExecRequest?.(data);
         } else if (ev.event === "error") {
           const data = JSON.parse(ev.data);
           onError(new Error(data.error || "Stream failed"));

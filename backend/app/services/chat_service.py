@@ -23,6 +23,7 @@ from app.services.base import BaseLLMService
 
 if TYPE_CHECKING:
     from app.services.agent_orchestrator import AgentOrchestrator
+    from app.services.frontend_bridge import FrontendBridge
 from app.services.rag_service import RAGService
 from app.services.token_utils import (
     TokenBudget,
@@ -133,12 +134,14 @@ class ChatService:
         tool_service: ToolService,
         embedding_service: BaseLLMService | None = None,
         orchestrator: "AgentOrchestrator | None" = None,
+        frontend_bridge: "FrontendBridge | None" = None,
     ):
         self.llm_service = llm_service
         self.rag_service = rag_service
         self.tool_service = tool_service
         self.embedding_service = embedding_service
         self.orchestrator = orchestrator
+        self.frontend_bridge = frontend_bridge
         self._budget_cache: dict[str, dict] = {}
 
     def get_cached_budget(self, conversation_id: str) -> dict | None:
@@ -300,6 +303,7 @@ class ChatService:
                 conv_tools=conv_tools,
                 tool_map={t.name: t for t in conv_tools},
                 phase=phase,
+                frontend_bridge=self.frontend_bridge,
             )
 
             if (

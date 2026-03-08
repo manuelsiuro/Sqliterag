@@ -2,16 +2,18 @@ from __future__ import annotations
 
 import pypdf
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
 
 from app.database import get_session
-from app.dependencies import get_chat_service
+from app.dependencies import get_chat_service, get_frontend_bridge
 from app.exceptions import NotFoundError
 from app.models.conversation import Conversation
 from app.schemas.message import MessageCreate
 from app.services.chat_service import ChatService
+from app.services.frontend_bridge import FrontendBridge
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -56,7 +58,7 @@ async def chat(
 async def extract_pdf(file: UploadFile = File(...)):
     if file.content_type != "application/pdf":
         raise HTTPException(status_code=400, detail="Only PDF files are supported")
-    
+
     try:
         reader = pypdf.PdfReader(file.file)
         text = ""
@@ -65,3 +67,21 @@ async def extract_pdf(file: UploadFile = File(...)):
         return {"text": text.strip()}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to process PDF: {str(e)}")
+
+
+class ToolCallbackBody(BaseModel):
+    result: str | None = None
+    error: str | None = None
+
+
+@router.post("/tool-callback/{request_id}")
+async def tool_callback(
+    request_id: str,
+    body: ToolCallbackBody,
+    bridge: FrontendBridge = Depends(get_frontend_bridge),
+):
+    """Receive tool execution results from the frontend (e.g. VM shell output)."""
+    found = bridge.submit_result(request_id, result=body.result, error=body.error)
+    if not found:
+        raise HTTPException(status_code=404, detail="Unknown or expired request_id")
+    return {"status": "ok"}

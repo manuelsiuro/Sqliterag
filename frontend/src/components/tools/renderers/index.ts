@@ -108,3 +108,7 @@ registerToolRenderer("xp_reward", EncounterRenderer);
 // Phase 15 — Session Recap
 import { RecapRenderer } from "./RecapRenderer";
 registerToolRenderer("session_recap", RecapRenderer);
+
+// Phase 16 — Shell / Linux VM
+import { ShellResultRenderer } from "./ShellResultRenderer";
+registerToolRenderer("shell_result", ShellResultRenderer);

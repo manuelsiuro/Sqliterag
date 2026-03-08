@@ -121,3 +121,56 @@ async def set_conversation_tools(
 
     await session.commit()
     return {"status": "ok", "tool_ids": data.tool_ids}
+
+
+# ── Linux VM Tool ──────────────────────────────────────────────
+_RUN_SHELL_SCHEMA = json.dumps({
+    "type": "object",
+    "required": ["command"],
+    "properties": {
+        "command": {
+            "type": "string",
+            "description": "The shell command to execute in the Alpine Linux VM",
+        }
+    },
+})
+
+
+@router.put("/linux/{conversation_id}")
+async def ensure_linux_tool(
+    conversation_id: str,
+    session: AsyncSession = Depends(get_session),
+):
+    """Ensure run_shell tool exists and is attached to the conversation."""
+    # Find or create the tool
+    result = await session.execute(select(Tool).where(Tool.name == "run_shell"))
+    tool = result.scalar_one_or_none()
+
+    if not tool:
+        tool = Tool(
+            name="run_shell",
+            description=(
+                "Execute a shell command in the user's Alpine Linux VM running in the browser. "
+                "Returns the command's stdout/stderr output. Use this to explore the filesystem, "
+                "install packages (apk add), run scripts, compile code, and more."
+            ),
+            parameters_schema=_RUN_SHELL_SCHEMA,
+            execution_type="frontend",
+            execution_config="{}",
+            is_enabled=True,
+        )
+        session.add(tool)
+        await session.flush()
+
+    # Attach to conversation if not already
+    existing = await session.execute(
+        select(ConversationTool).where(
+            ConversationTool.conversation_id == conversation_id,
+            ConversationTool.tool_id == tool.id,
+        )
+    )
+    if not existing.scalar_one_or_none():
+        session.add(ConversationTool(conversation_id=conversation_id, tool_id=tool.id))
+
+    await session.commit()
+    return {"status": "ok", "tool_id": tool.id}

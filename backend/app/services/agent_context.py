@@ -15,6 +15,7 @@ from app.services.token_utils import TokenBudget
 
 if TYPE_CHECKING:
     from app.services.base import BaseLLMService
+    from app.services.frontend_bridge import FrontendBridge
     from app.services.prompt_builder import GamePhase
     from app.services.tool_service import ToolService
 
@@ -41,6 +42,9 @@ class AgentContext:
     conv_tools: list[Tool] = field(default_factory=list)
     tool_map: dict[str, Tool] = field(default_factory=dict)
     phase: GamePhase | None = None
+
+    # Frontend bridge for browser-executed tools
+    frontend_bridge: FrontendBridge | None = None
 
     # Pipeline outputs
     final_response: str | None = None
