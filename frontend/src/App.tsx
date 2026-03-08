@@ -9,9 +9,11 @@ import { ToolsPanel } from "@/components/tools";
 import { DocumentList } from "@/components/documents";
 import { GamePanel } from "@/components/rpg/GamePanel";
 import { KnowledgeGraphModal } from "@/components/rpg/KnowledgeGraphModal";
+import { LinuxPanel } from "@/components/linux/LinuxPanel";
 import { useChatStore } from "@/store/chatStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useUIStore } from "@/store/uiStore";
+import { useLinuxStore } from "@/store/linuxStore";
 
 const MODAL_TITLES: Record<string, string> = {
   settings: "Settings",
@@ -24,6 +26,7 @@ function App() {
   const { error, clearError, conversations, activeConversationId } = useChatStore();
   const { loadLocalModels } = useSettingsStore();
   const { activeModal, closeModal } = useUIStore();
+  const { isPanelVisible } = useLinuxStore();
 
   const activeConv = conversations.find(c => c.id === activeConversationId);
   const isRpgSession = activeConv?.title === "D&D Adventure" || !!activeConv?.campaign_id;
@@ -38,10 +41,15 @@ function App() {
         <TopBar />
         <div className="flex flex-1 min-h-0">
           <Sidebar />
-          <main className="flex-1 flex flex-col min-w-0">
+          <main className={`flex-1 flex flex-col min-w-0 ${isPanelVisible ? "max-w-[60%]" : ""}`}>
             <ChatWindow />
           </main>
           {isRpgSession && <GamePanel />}
+          {isPanelVisible && (
+            <div className="w-[40%] min-w-[350px] max-w-[600px]">
+              <LinuxPanel />
+            </div>
+          )}
         </div>
       </div>
 

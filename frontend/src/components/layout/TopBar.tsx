@@ -3,6 +3,7 @@ import { useChatStore } from "@/store/chatStore";
 import { useCampaignStore } from "@/store/campaignStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useUIStore } from "@/store/uiStore";
+import { useLinuxStore } from "@/store/linuxStore";
 import { SessionDropdown } from "./SessionDropdown";
 import { api } from "@/services/api";
 
@@ -20,6 +21,7 @@ export function TopBar() {
   const { continueCampaign, loadCampaigns } = useCampaignStore();
   const { localModels } = useSettingsStore();
   const { sessionDropdownOpen, setSessionDropdownOpen } = useUIStore();
+  const { isPanelVisible, isVMBooting, togglePanel } = useLinuxStore();
 
   useEffect(() => {
     loadConversations();
@@ -128,11 +130,36 @@ CRITICAL INSTRUCTIONS BEFORE WE BEGIN:
         </button>
       )}
 
+      {/* Linux button */}
+      <button
+        title={isPanelVisible ? "Hide Linux Terminal" : "Open Linux Terminal"}
+        onClick={togglePanel}
+        className={`px-3 py-1.5 text-white text-sm rounded-lg transition-colors ml-auto flex items-center gap-1.5 ${isPanelVisible
+            ? "bg-green-600 hover:bg-green-500 ring-1 ring-green-400/50"
+            : "bg-green-700 hover:bg-green-600"
+          }`}
+      >
+        {isVMBooting ? (
+          <>
+            <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            Booting...
+          </>
+        ) : (
+          <>
+            <span className="text-base leading-none">🐧</span>
+            Linux
+          </>
+        )}
+      </button>
+
       {/* Editor button */}
       <button
         title="Insert Editor Setup Prompt"
         onClick={handleEditorSetup}
-        className="px-3 py-1.5 bg-purple-700 hover:bg-purple-600 text-white text-sm rounded-lg transition-colors ml-auto flex items-center gap-1.5"
+        className="px-3 py-1.5 bg-purple-700 hover:bg-purple-600 text-white text-sm rounded-lg transition-colors flex items-center gap-1.5"
       >
         <span className="text-base leading-none">✨</span>
         Editor
