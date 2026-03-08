@@ -26,7 +26,7 @@ class OllamaService(BaseLLMService, BaseEmbeddingService):
             data = resp.json()
             return data.get("models", [])
 
-    async def chat_stream(self, model: str, messages: list[dict], **kwargs) -> AsyncGenerator[str]:
+    async def chat_stream(self, model: str, messages: list[dict], **kwargs) -> AsyncGenerator:
         payload = {"model": model, "messages": messages, "stream": True, **kwargs}
         in_think = False
         async with (
@@ -53,6 +53,8 @@ class OllamaService(BaseLLMService, BaseEmbeddingService):
                             continue
                         yield content
                     if chunk.get("done"):
+                        # Yield the final chunk as a dict containing Ollama metrics
+                        yield chunk
                         return
 
     async def chat(self, model: str, messages: list[dict], **kwargs) -> dict:
@@ -60,10 +62,16 @@ class OllamaService(BaseLLMService, BaseEmbeddingService):
         async with httpx.AsyncClient(timeout=httpx.Timeout(300.0)) as client:
             resp = await client.post(f"{self.base_url}/api/chat", json=payload)
             resp.raise_for_status()
-            message = resp.json().get("message", {})
+            data = resp.json()
+            message = data.get("message", {})
             # Strip leaked <think> blocks from non-streaming response
             if message.get("content"):
                 message["content"] = _THINK_BLOCK_RE.sub("", message["content"]).strip()
+            # Attach Ollama metrics to the message dict for upstream consumers
+            for key in ("total_duration", "load_duration", "prompt_eval_count",
+                        "prompt_eval_duration", "eval_count", "eval_duration"):
+                if key in data:
+                    message[key] = data[key]
             return message
 
     async def show_model(self, name: str) -> dict:

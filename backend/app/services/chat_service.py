@@ -324,8 +324,21 @@ class ChatService:
             )
             self._budget_cache[conversation_id] = budget.to_dict()
             full_response = ""
+            llm_metrics = None
             try:
                 async for token in self.llm_service.chat_stream(model, messages, **kwargs):
+                    if isinstance(token, dict):
+                        # Final done-chunk with Ollama metrics
+                        llm_metrics = {
+                            k: token[k]
+                            for k in (
+                                "total_duration", "load_duration",
+                                "prompt_eval_count", "prompt_eval_duration",
+                                "eval_count", "eval_duration",
+                            )
+                            if k in token
+                        }
+                        continue
                     full_response += token
                     yield ServerSentEvent(data=json.dumps({"token": token}), event="token")
             except asyncio.CancelledError:
@@ -342,6 +355,7 @@ class ChatService:
                     conversation_id=conversation_id,
                     role="assistant",
                     content=full_response,
+                    metrics=json.dumps(llm_metrics) if llm_metrics else None,
                 )
                 session.add(assistant_msg)
                 await session.commit()
@@ -354,6 +368,8 @@ class ChatService:
             done_data2: dict = {"message_id": assistant_msg.id}
             if actions:
                 done_data2["actions"] = actions
+            if llm_metrics:
+                done_data2["metrics"] = llm_metrics
             yield ServerSentEvent(data=json.dumps(done_data2), event="done")
 
     async def _load_conversation_tools(

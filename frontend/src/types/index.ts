@@ -48,6 +48,7 @@ export interface Message {
   tool_calls?: Array<{ function: { name: string; arguments: Record<string, unknown> } }> | null;
   tool_name?: string | null;
   actions?: ActionSuggestion[];
+  metrics?: Record<string, number> | null;
   created_at: string;
 }
 
@@ -128,6 +129,7 @@ export interface ChatTokenEvent {
 export interface ChatDoneEvent {
   message_id: string;
   actions?: ActionSuggestion[];
+  metrics?: Record<string, number>;
 }
 
 // Tool types

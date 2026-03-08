@@ -307,12 +307,24 @@ class SingleAgent(BaseAgent):
                         data=json.dumps({"token": chunk}), event="token"
                     )
 
+                # Extract Ollama metrics from response
+                llm_metrics = {
+                    k: response[k]
+                    for k in (
+                        "total_duration", "load_duration",
+                        "prompt_eval_count", "prompt_eval_duration",
+                        "eval_count", "eval_duration",
+                    )
+                    if k in response
+                }
+
                 # Save assistant message
                 try:
                     assistant_msg = Message(
                         conversation_id=ctx.conversation_id,
                         role="assistant",
                         content=content,
+                        metrics=json.dumps(llm_metrics) if llm_metrics else None,
                     )
                     ctx.session.add(assistant_msg)
                     await ctx.session.commit()
@@ -328,6 +340,8 @@ class SingleAgent(BaseAgent):
                 done_data: dict = {"message_id": assistant_msg.id}
                 if actions:
                     done_data["actions"] = actions
+                if llm_metrics:
+                    done_data["metrics"] = llm_metrics
                 yield ServerSentEvent(
                     data=json.dumps(done_data),
                     event="done",

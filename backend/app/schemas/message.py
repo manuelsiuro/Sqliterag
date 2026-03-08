@@ -33,6 +33,7 @@ class MessageRead(BaseModel):
     images: list[str] | None = None
     tool_calls: list | dict | None = None
     tool_name: str | None = None
+    metrics: dict | None = None
     created_at: datetime
 
     @field_validator("tool_calls", mode="before")
@@ -45,6 +46,13 @@ class MessageRead(BaseModel):
     @field_validator("images", mode="before")
     @classmethod
     def parse_images(cls, v):
+        if isinstance(v, str):
+            return json.loads(v)
+        return v
+
+    @field_validator("metrics", mode="before")
+    @classmethod
+    def parse_metrics(cls, v):
         if isinstance(v, str):
             return json.loads(v)
         return v

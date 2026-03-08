@@ -22,6 +22,7 @@ class Message(Base):
     images: Mapped[Optional[str]] = mapped_column(Text, nullable=True) # JSON of relative file paths
     tool_calls: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON of tool_calls array
     tool_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # for role="tool" messages
+    metrics: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON of LLM response metrics
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
     conversation: Mapped[Conversation] = relationship("Conversation", back_populates="messages")
