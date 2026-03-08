@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import logging
 import re
 from collections.abc import AsyncGenerator
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from sqlalchemy import select
@@ -156,14 +158,21 @@ class ChatService:
             role="user",
             content=user_message,
         )
+        if hasattr(options, "images") and options.images:
+             user_msg.images = json.dumps(options.images)
+        elif isinstance(options, dict) and options.get("images"):
+             user_msg.images = json.dumps(options.get("images"))
+             
         session.add(user_msg)
         await session.flush()
 
         # Merge default model parameters with user overrides (user wins)
         merged_options = dict(settings.default_model_parameters)
         merged_options["num_ctx"] = settings.default_num_ctx
-        if options:
-            merged_options.update(options)
+        if options and isinstance(options, dict):
+            # Exclude non-Ollama parameters like images
+            opts = {k: v for k, v in options.items() if k != "images"}
+            merged_options.update(opts)
         options = merged_options
 
         # Initialize token budget
@@ -181,6 +190,21 @@ class ChatService:
         messages = []
         for m in history:
             msg = {"role": m.role, "content": m.content}
+            if m.images:
+                try:
+                    paths = json.loads(m.images)
+                    base64_images = []
+                    for path in paths:
+                        p = Path(path)
+                        if p.exists():
+                            with open(p, "rb") as f:
+                                b64 = base64.b64encode(f.read()).decode("utf-8")
+                                base64_images.append(b64)
+                    if base64_images:
+                        msg["images"] = base64_images
+                except Exception as e:
+                    logger.warning(f"Error loading images for message {m.id}: {e}")
+                    
             if m.role == "assistant" and m.tool_calls:
                 msg["tool_calls"] = json.loads(m.tool_calls)
             if m.role == "tool" and m.tool_name:

@@ -44,6 +44,7 @@ export interface Message {
   conversation_id: string;
   role: "user" | "assistant" | "system" | "tool";
   content: string;
+  images?: string[] | null;
   tool_calls?: Array<{ function: { name: string; arguments: Record<string, unknown> } }> | null;
   tool_name?: string | null;
   actions?: ActionSuggestion[];

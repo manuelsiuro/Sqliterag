@@ -20,6 +20,7 @@ class ModelParameters(BaseModel):
 class MessageCreate(BaseModel):
     message: str
     parameters: ModelParameters | None = None
+    images: list[str] | None = None
 
 
 class MessageRead(BaseModel):
@@ -29,6 +30,7 @@ class MessageRead(BaseModel):
     conversation_id: str
     role: str
     content: str
+    images: list[str] | None = None
     tool_calls: list | dict | None = None
     tool_name: str | None = None
     created_at: datetime
@@ -36,6 +38,13 @@ class MessageRead(BaseModel):
     @field_validator("tool_calls", mode="before")
     @classmethod
     def parse_tool_calls(cls, v):
+        if isinstance(v, str):
+            return json.loads(v)
+        return v
+        
+    @field_validator("images", mode="before")
+    @classmethod
+    def parse_images(cls, v):
         if isinstance(v, str):
             return json.loads(v)
         return v

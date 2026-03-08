@@ -22,7 +22,7 @@ interface ChatState {
   selectConversation: (id: string) => Promise<void>;
   deleteConversation: (id: string) => Promise<void>;
   updateConversationTitle: (id: string, title: string) => Promise<void>;
-  sendMessage: (message: string) => void;
+  sendMessage: (message: string, images?: string[]) => void;
   stopStreaming: () => void;
   clearError: () => void;
   setPendingInput: (text: string | null) => void;
@@ -112,7 +112,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }));
   },
 
-  sendMessage: (message: string) => {
+  sendMessage: (message: string, images?: string[]) => {
     const { activeConversationId, messages, conversations } = get();
     if (!activeConversationId || get().isStreaming) return;
 
@@ -130,6 +130,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       conversation_id: activeConversationId,
       role: "user",
       content: message,
+      ...(images?.length ? { images } : {}),
       created_at: new Date().toISOString(),
     };
 
@@ -147,6 +148,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const ctrl = api.streamChat(
       activeConversationId,
       message,
+      images,
       (token) => {
         set((s) => ({ streamingContent: s.streamingContent + token }));
       },

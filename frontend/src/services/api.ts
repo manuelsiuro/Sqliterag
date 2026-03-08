@@ -62,6 +62,7 @@ export const api = {
   streamChat: (
     conversationId: string,
     message: string,
+    images: string[] | undefined,
     onToken: (token: string) => void,
     onDone: (messageId: string, actions?: ActionSuggestion[]) => void,
     onError: (err: Error) => void,
@@ -74,7 +75,7 @@ export const api = {
     fetchEventSource(`${BASE_URL}/chat/${conversationId}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message, parameters }),
+      body: JSON.stringify({ message, parameters, images }),
       signal: ctrl.signal,
       onmessage(ev) {
         if (ev.event === "token") {
@@ -160,6 +161,35 @@ export const api = {
 
   deleteDocument: (id: string) =>
     request<void>(`/documents/${id}`, { method: "DELETE" }),
+
+  // Attachments
+  uploadImage: async (file: File): Promise<{ path: string }> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await fetch(`${BASE_URL}/upload/image`, {
+      method: "POST",
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || "Image upload failed");
+    }
+    return res.json();
+  },
+
+  extractPdf: async (file: File): Promise<{ text: string }> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await fetch(`${BASE_URL}/chat/extract-pdf`, {
+      method: "POST",
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || "PDF extraction failed");
+    }
+    return res.json();
+  },
 
   // Settings
   getSettings: () => request<Record<string, string>>("/settings"),

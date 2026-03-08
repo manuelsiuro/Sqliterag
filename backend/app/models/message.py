@@ -19,6 +19,7 @@ class Message(Base):
     )
     role: Mapped[str] = mapped_column(String(20))  # "user", "assistant", "system", "tool"
     content: Mapped[str] = mapped_column(Text)
+    images: Mapped[Optional[str]] = mapped_column(Text, nullable=True) # JSON of relative file paths
     tool_calls: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON of tool_calls array
     tool_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # for role="tool" messages
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())

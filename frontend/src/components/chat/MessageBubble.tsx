@@ -51,16 +51,28 @@ export const MessageBubble = memo(
         className={`group relative flex ${isUser ? "justify-end" : "justify-start"} mb-4`}
       >
         <div
-          className={`relative max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed ${
-            isUser
+          className={`relative max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed ${isUser
               ? "bg-blue-600 text-white rounded-br-md"
               : "bg-gradient-to-br from-gray-900 to-gray-800/90 border border-gray-700/30 border-l-2 border-l-indigo-500/40 text-gray-100 rounded-bl-md"
-          }`}
+            }`}
         >
           {/* Copy button — inside bubble */}
           <div className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-10">
             <CopyButton text={message.content} size="sm" />
           </div>
+
+          {message.images && message.images.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-3">
+              {message.images.map((img, i) => (
+                <img
+                  key={i}
+                  src={`/api/${img}`}
+                  alt="Attachment"
+                  className="max-w-full sm:max-w-xs max-h-64 object-contain rounded-lg border border-gray-700/50 bg-black/20"
+                />
+              ))}
+            </div>
+          )}
 
           {isUser ? (
             <p className="whitespace-pre-wrap">{message.content}</p>

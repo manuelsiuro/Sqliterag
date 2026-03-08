@@ -6,8 +6,13 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
+from sqlalchemy import event
+import sqlite_vec
+import logging
 
 from app.models import Base
+
+logger = logging.getLogger('alembic.env')
 
 config = context.config
 if config.config_file_name is not None:
@@ -28,8 +33,27 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
+def _load_sqlite_extensions(dbapi_connection, _connection_record):
+    raw_conn = getattr(dbapi_connection, "driver_connection", dbapi_connection)
+    if hasattr(raw_conn, "_conn"):
+        raw_conn = raw_conn._conn
+
+    if not hasattr(raw_conn, "enable_load_extension"):
+        return
+
+    try:
+        raw_conn.enable_load_extension(True)
+        sqlite_vec.load(raw_conn)
+        raw_conn.enable_load_extension(False)
+    except Exception as e:
+        logger.warning(f"Could not load sqlite-vec in Alembic: {e}")
+
 def do_run_migrations(connection) -> None:
     context.configure(connection=connection, target_metadata=target_metadata)
+    
+    # ensure vec is loaded on the synchronous connection underlying the async one
+    _load_sqlite_extensions(connection.connection.dbapi_connection, None)
+    
     with context.begin_transaction():
         context.run_migrations()
 
