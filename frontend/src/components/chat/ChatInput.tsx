@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, type KeyboardEvent } from "react";
 import { useChatStore } from "@/store/chatStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { api } from "@/services/api";
-import { X, Paperclip, FileText, Image as ImageIcon } from "lucide-react";
+import { X, Paperclip, FileText, Image as ImageIcon, Cpu } from "lucide-react";
 
 interface Attachment {
   id: string;
@@ -264,6 +264,12 @@ export function ChatInput({ onSend, disabled, isStreaming, onStop }: ChatInputPr
           </button>
         )}
       </div>
+      {activeConv?.model && (
+        <div className="max-w-4xl mx-auto mt-1.5 flex items-center gap-1.5 px-1">
+          <Cpu className="w-3 h-3 text-gray-500" />
+          <span className="text-[11px] text-gray-500">{activeConv.model}</span>
+        </div>
+      )}
     </div>
   );
 }

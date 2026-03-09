@@ -24,6 +24,7 @@ interface ChatState {
   selectConversation: (id: string) => Promise<void>;
   deleteConversation: (id: string) => Promise<void>;
   updateConversationTitle: (id: string, title: string) => Promise<void>;
+  updateConversationModel: (id: string, model: string) => Promise<void>;
   sendMessage: (message: string, images?: string[]) => void;
   stopStreaming: () => void;
   clearError: () => void;
@@ -112,6 +113,22 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set((s) => ({
       conversations: s.conversations.map((c) => (c.id === id ? { ...c, title } : c)),
     }));
+  },
+
+  updateConversationModel: async (id: string, model: string) => {
+    const previousModel = get().conversations.find(c => c.id === id)?.model;
+    set((s) => ({
+      conversations: s.conversations.map((c) => (c.id === id ? { ...c, model } : c)),
+    }));
+    try {
+      await api.updateConversation(id, { model });
+    } catch {
+      if (previousModel !== undefined) {
+        set((s) => ({
+          conversations: s.conversations.map((c) => (c.id === id ? { ...c, model: previousModel } : c)),
+        }));
+      }
+    }
   },
 
   sendMessage: (message: string, images?: string[]) => {

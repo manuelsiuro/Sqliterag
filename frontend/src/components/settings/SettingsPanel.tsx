@@ -3,7 +3,6 @@ import { ModelDetailCard } from "./ModelDetailCard";
 import { ModelParametersForm } from "./ModelParametersForm";
 import { HuggingFaceSearch } from "./HuggingFaceSearch";
 import { useChatStore } from "@/store/chatStore";
-import { api } from "@/services/api";
 
 export function SettingsPanel() {
   const { activeConversationId, conversations } = useChatStore();
@@ -12,8 +11,7 @@ export function SettingsPanel() {
 
   const handleModelChange = async (model: string) => {
     if (activeConversationId) {
-      await api.updateConversation(activeConversationId, { model });
-      useChatStore.getState().loadConversations();
+      await useChatStore.getState().updateConversationModel(activeConversationId, model);
     }
   };
 
